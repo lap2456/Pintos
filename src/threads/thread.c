@@ -15,7 +15,7 @@
 #include "userprog/process.h"
 #endif
 
-//LOLLIPOPSSSSSS
+//Morgan loves LOLLIPOPSSSSSS
 
 /* Random value for struct thread's `magic' member.
    Used to detect stack overflow.  See the big comment at the top
