@@ -10,11 +10,6 @@
 #include "threads/synch.h"
 #include "threads/thread.h"
 
-/* Initialize lock and conditional variable*/
-struct lock * sleepLock;
-lock_init(sleepLock);
-struct condition * sleep;
-cond_init(sleep); 
 
 /* See [8254] for hardware details of the 8254 timer chip. */
 
@@ -115,22 +110,20 @@ timer_elapsed (int64_t then)
 void
 timer_sleep (int64_t ticks) 
 {
-  //acquire lock
-  //block
-  //while
-  //unblock
-  thread_current().ticks = ticks; //sets the current thread's number of ticks 
-  thread_current().start = timer_ticks(); 
-  ASSERT (intr_get_level () == INTR_ON);
-  lock_acquire(sleepLock); 
-  while(timer_elapsed(thread_current().start < ticks){
-    cond_wait(sleep, sleepLock);
+  if(&sleep == NULL){
+    lock_init (&sleepLock);
+    cond_init (&sleep); 
   }
-  lock_release(sleepLock);
-
-  //int64_t start = timer_ticks ();
-  //while (timer_elapsed (start) < ticks) 
-  //  thread_yield ();
+  struct thread *t = thread_current();
+  t->ticks = ticks; //sets the current thread's number of ticks 
+  t->start = timer_ticks(); 
+  ASSERT (intr_get_level () == INTR_ON);
+  lock_acquire(&sleepLock); 
+  while(timer_elapsed(t->start < ticks)){
+    t->status = THREAD_BLOCKED; 
+    cond_wait(&sleep, &sleepLock);
+  }
+  lock_release(&sleepLock);
 }
 
 /* Sleeps for approximately MS milliseconds.  Interrupts must be

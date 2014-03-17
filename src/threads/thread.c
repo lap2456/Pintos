@@ -11,6 +11,8 @@
 #include "threads/switch.h"
 #include "threads/synch.h"
 #include "threads/vaddr.h"
+#include "devices/timer.h"
+#include "lib/kernel/list.h"
 #ifdef USERPROG
 #include "userprog/process.h"
 #endif
@@ -22,9 +24,7 @@
    of thread.h for details. */
 #define THREAD_MAGIC 0xcd6abf4b
 
-/* List of processes in THREAD_READY state, that is, processes
-   that are ready to run but not actually running. */
-static struct list ready_list;
+
 
 /* List of all processes.  Processes are added to this list
    when they are first scheduled and removed when they exit. */
@@ -38,6 +38,9 @@ static struct thread *initial_thread;
 
 /* Lock used by allocate_tid(). */
 static struct lock tid_lock;
+
+/*lock and condition for sleepers*/
+
 
 /* Stack frame for kernel_thread(). */
 struct kernel_thread_frame 
@@ -64,7 +67,6 @@ bool thread_mlfqs;
 static void kernel_thread (thread_func *, void *aux);
 
 static void idle (void *aux UNUSED);
-static struct thread *running_thread (void);
 static struct thread *next_thread_to_run (void);
 static void init_thread (struct thread *, const char *name, int priority);
 static bool is_thread (struct thread *) UNUSED;
@@ -564,21 +566,23 @@ schedule (void)
   ASSERT (intr_get_level () == INTR_OFF);
   ASSERT (cur->status != THREAD_RUNNING);
   ASSERT (is_thread (next));
-  lock_acquire(sleepLock);
+  lock_acquire(&sleepLock);
   int done = 0;
-  list_elem * current = head->next;
+  struct list_elem * current = sleep.waiters.head.next;
   struct thread *t;
-  while(!done && current != tail){
+  while(!done && (current != &((&sleep)->waiters.tail))){
     t = list_entry(current, struct thread, elem);
-    if(timer_elapsed(t.start < t.ticks)){
+    if(timer_elapsed(t->start < t->ticks)){
       done = 1;
     }
     else{
-      cond_signal(sleep, sleepLock);
-      current = head->next;
+      cond_signal(&sleep, &sleepLock);
+      list_push_back(&ready_list, &t->elem);
+      t->status = THREAD_READY;
+      current = sleep.waiters.head.next;
     }
   }
-  lock_release(sleepLock);
+  lock_release(&sleepLock);
   if (cur != next)
     prev = switch_threads (cur, next);
   thread_schedule_tail (prev);

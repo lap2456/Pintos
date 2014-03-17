@@ -6,12 +6,17 @@
 * to be modified in all four projects. 
 */
 
+
 #ifndef THREADS_THREAD_H
 #define THREADS_THREAD_H
 
 #include <debug.h>
 #include <list.h>
 #include <stdint.h>
+
+/* List of processes in THREAD_READY state, that is, processes
+   that are ready to run but not actually running. */
+static struct list ready_list;
 
 /* States in a thread's life cycle. */
 enum thread_status
@@ -102,7 +107,8 @@ struct thread
 
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element. */
-
+    int64_t ticks; /*Number of ticks to sleep in timer_sleep()*/
+    int64_t start;
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
     uint32_t *pagedir;                  /* Page directory. */
@@ -110,9 +116,7 @@ struct thread
 
     /* Owned by thread.c. */
     unsigned magic;                     /* Detects stack overflow. */
-  
-    int64_t ticks; /*Number of ticks to sleep in timer_sleep()*/
-    int64_t start; 
+   
   };
 
 /* If false (default), use round-robin scheduler.
@@ -131,7 +135,7 @@ tid_t thread_create (const char *name, int priority, thread_func *, void *);
 
 void thread_block (void);
 void thread_unblock (struct thread *);
-
+struct thread *running_thread (void);
 struct thread *thread_current (void);
 tid_t thread_tid (void);
 const char *thread_name (void);
@@ -150,5 +154,6 @@ int thread_get_nice (void);
 void thread_set_nice (int);
 int thread_get_recent_cpu (void);
 int thread_get_load_avg (void);
+
 
 #endif /* threads/thread.h */
