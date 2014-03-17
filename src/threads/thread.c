@@ -15,7 +15,7 @@
 #include "userprog/process.h"
 #endif
 
-//Morgan loves LOLLIPOPSSSSSS
+//last edit 3/16
 
 /* Random value for struct thread's `magic' member.
    Used to detect stack overflow.  See the big comment at the top
@@ -552,7 +552,6 @@ thread_schedule_tail (struct thread *prev)
    the running process's state must have been changed from
    running to some other state.  This function finds another
    thread to run and switches to it.
-
    It's not safe to call printf() until thread_schedule_tail()
    has completed. */
 static void
@@ -565,7 +564,21 @@ schedule (void)
   ASSERT (intr_get_level () == INTR_OFF);
   ASSERT (cur->status != THREAD_RUNNING);
   ASSERT (is_thread (next));
-
+  lock_acquire(sleepLock);
+  int done = 0;
+  list_elem * current = head->next;
+  struct thread *t;
+  while(!done && current != tail){
+    t = list_entry(current, struct thread, elem);
+    if(timer_elapsed(t.start < t.ticks)){
+      done = 1;
+    }
+    else{
+      cond_signal(sleep, sleepLock);
+      current = head->next;
+    }
+  }
+  lock_release(sleepLock);
   if (cur != next)
     prev = switch_threads (cur, next);
   thread_schedule_tail (prev);
@@ -584,7 +597,7 @@ allocate_tid (void)
 
   return tid;
 }
-
+
 /* Offset of `stack' member within `struct thread'.
    Used by switch.S, which can't figure it out on its own. */
 uint32_t thread_stack_ofs = offsetof (struct thread, stack);

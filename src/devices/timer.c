@@ -1,3 +1,5 @@
+//LAST EDIT 3/16 
+
 #include "devices/timer.h"
 #include <debug.h>
 #include <inttypes.h>
@@ -7,7 +9,13 @@
 #include "threads/interrupt.h"
 #include "threads/synch.h"
 #include "threads/thread.h"
-  
+
+/* Initialize lock and conditional variable*/
+struct lock * sleepLock;
+lock_init(sleepLock);
+struct condition * sleep;
+cond_init(sleep); 
+
 /* See [8254] for hardware details of the 8254 timer chip. */
 
 #if TIMER_FREQ < 19
@@ -84,16 +92,45 @@ timer_elapsed (int64_t then)
   return timer_ticks () - then;
 }
 
+
+/*
+* 2.2.2: Alarm Clock
+* Task: Reimplement timer_sleep() so that it does not busy wait.
+* Instead of spinning in a loop, checking the current time, 
+* and calling thread_yield() until enough time has gone by, it should 
+* suspend execution of the calling thread until time has advanced
+* by at least x timer ticks. Unless the system is otherwise idle, 
+* the thread need not wake up after exactly x ticks. Just put it on 
+* the ready queue after they have waited for the right amount of time. 
+*
+* The argument is expressed in timer ticks. THere are TIMER_FREQ timer
+* ticks per second, where TIMER_FREQ() is a macro defined in devices/timer.h.
+* The default value is 100. Recommended not to change this value. 
+*
+* No need to modify timer_msleep(), timer_usleep(), or timer_nsleep(). 
+*/
+
 /* Sleeps for approximately TICKS timer ticks.  Interrupts must
    be turned on. */
 void
 timer_sleep (int64_t ticks) 
 {
-  int64_t start = timer_ticks ();
-
+  //acquire lock
+  //block
+  //while
+  //unblock
+  thread_current().ticks = ticks; //sets the current thread's number of ticks 
+  thread_current().start = timer_ticks(); 
   ASSERT (intr_get_level () == INTR_ON);
-  while (timer_elapsed (start) < ticks) 
-    thread_yield ();
+  lock_acquire(sleepLock); 
+  while(timer_elapsed(thread_current().start < ticks){
+    cond_wait(sleep, sleepLock);
+  }
+  lock_release(sleepLock);
+
+  //int64_t start = timer_ticks ();
+  //while (timer_elapsed (start) < ticks) 
+  //  thread_yield ();
 }
 
 /* Sleeps for approximately MS milliseconds.  Interrupts must be
@@ -165,7 +202,7 @@ timer_print_stats (void)
 {
   printf ("Timer: %"PRId64" ticks\n", timer_ticks ());
 }
-
+
 /* Timer interrupt handler. */
 static void
 timer_interrupt (struct intr_frame *args UNUSED)

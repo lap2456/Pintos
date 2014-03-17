@@ -1,3 +1,10 @@
+//LAST EDIT: 3/16 
+
+/*
+* Basic synchronization primitives: semaphores, locks, condition variables, and optimization barriers. 
+* Needs to be modified for part 1.
+*/
+
 #ifndef THREADS_SYNCH_H
 #define THREADS_SYNCH_H
 

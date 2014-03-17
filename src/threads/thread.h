@@ -1,3 +1,11 @@
+//LAST EDIT 3/16 
+
+
+/*
+* Basic thread support. Defines struct thread, which is likely
+* to be modified in all four projects. 
+*/
+
 #ifndef THREADS_THREAD_H
 #define THREADS_THREAD_H
 
@@ -102,6 +110,9 @@ struct thread
 
     /* Owned by thread.c. */
     unsigned magic;                     /* Detects stack overflow. */
+  
+    int64_t ticks; /*Number of ticks to sleep in timer_sleep()*/
+    int64_t start; 
   };
 
 /* If false (default), use round-robin scheduler.
