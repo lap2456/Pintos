@@ -18,13 +18,20 @@
    that are ready to run but not actually running. */
 static struct list ready_list;
 
+/*Added. List of processes in THREAD_WAITING state, meaning
+  they are placed on the waiting_list */
+static struct list waiting_list; 
+
+
 /* States in a thread's life cycle. */
 enum thread_status
   {
     THREAD_RUNNING,     /* Running thread. */
     THREAD_READY,       /* Not running but ready to run. */
     THREAD_BLOCKED,     /* Waiting for an event to trigger. */
-    THREAD_DYING        /* About to be destroyed. */
+    THREAD_DYING,        /* About to be destroyed. */
+
+    THREAD_WAITING     /*added; thread about to be put to sleep*/
   };
 
 /* Thread identifier type.
@@ -107,8 +114,8 @@ struct thread
 
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element. */
-    int64_t ticks; /*Number of ticks to sleep in timer_sleep()*/
-    int64_t start;
+    int64_t sleep_ticks; /*Number of ticks to sleep in timer_sleep()*/
+
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
     uint32_t *pagedir;                  /* Page directory. */
@@ -155,5 +162,5 @@ void thread_set_nice (int);
 int thread_get_recent_cpu (void);
 int thread_get_load_avg (void);
 
-
+void go_to_sleep(int64_t ticks); /*added*/ 
 #endif /* threads/thread.h */

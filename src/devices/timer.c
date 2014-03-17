@@ -1,4 +1,4 @@
-//LAST EDIT 3/16 
+//LAST EDIT 3/17 
 
 #include "devices/timer.h"
 #include <debug.h>
@@ -110,20 +110,11 @@ timer_elapsed (int64_t then)
 void
 timer_sleep (int64_t ticks) 
 {
-  if(&sleep == NULL){
-    lock_init (&sleepLock);
-    cond_init (&sleep); 
+  ASSERT (intr_get_level () == INTR_ON); //interrupts must be on 
+  if(ticks>0){ //if number of ticks has not run out 
+      go_to_sleep(ticks); //t_sleep in threads.c  
   }
-  struct thread *t = thread_current();
-  t->ticks = ticks; //sets the current thread's number of ticks 
-  t->start = timer_ticks(); 
-  ASSERT (intr_get_level () == INTR_ON);
-  lock_acquire(&sleepLock); 
-  while(timer_elapsed(t->start < ticks)){
-    t->status = THREAD_BLOCKED; 
-    cond_wait(&sleep, &sleepLock);
-  }
-  lock_release(&sleepLock);
+   
 }
 
 /* Sleeps for approximately MS milliseconds.  Interrupts must be

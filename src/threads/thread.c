@@ -75,6 +75,16 @@ static void schedule (void);
 void thread_schedule_tail (struct thread *prev);
 static tid_t allocate_tid (void);
 
+
+void go_to_sleep(int64_t ticks){
+  struct thread *t = thread_current();
+  enum intr_level old_level = intr_disable(); 
+  t->status = THREAD_WAITING; //about to be put to sleep 
+  t->sleep_ticks = ticks; //sets the current thread's number of sleep ticks  
+  list_push_back(&waiting_list, &t->elem); //add to waiting list 
+  schedule(); 
+  intr_set_level(old_level); //disable interrupts 
+}
 /* Initializes the threading system by transforming the code
    that's currently running into a thread.  This can't work in
    general and it is possible in this case only because loader.S
@@ -95,6 +105,7 @@ thread_init (void)
 
   lock_init (&tid_lock);
   list_init (&ready_list);
+  list_init(&waiting_list); /*added*/
   list_init (&all_list);
 
   /* Set up a thread structure for the running thread. */
@@ -128,6 +139,12 @@ thread_tick (void)
 {
   struct thread *t = thread_current ();
 
+
+  /*added*/
+  struct list_elem *waitThread = list_begin(&waiting_list); 
+  struct list_elem *temp; 
+  struct thread *thr;  
+
   /* Update statistics. */
   if (t == idle_thread)
     idle_ticks++;
@@ -137,6 +154,21 @@ thread_tick (void)
 #endif
   else
     kernel_ticks++;
+
+  /*added*/
+  if(list_begin(&waiting_list)!=NULL){ //if waiting list is not empty
+    while(waitThread != list_end(&waiting_list)){ //cycle through list 
+        temp = waitThread->next; //advance temp
+        thr = list_entry(waitThread, struct thread, elem); //get thread
+        if(thr->sleep_ticks ==1){ //if only 1 sleep tick left 
+          list_remove(waitThread); //take off waiting list
+          list_push_back(&ready_list, &thr->elem); 
+        } else { //more than 1 sleep tick left 
+          thr->sleep_ticks = thr->sleep_ticks -1; //decrement # of ticks 
+        }
+        waitThread = temp; 
+    }
+  }
 
   /* Enforce preemption. */
   if (++thread_ticks >= TIME_SLICE)
@@ -566,26 +598,9 @@ schedule (void)
   ASSERT (intr_get_level () == INTR_OFF);
   ASSERT (cur->status != THREAD_RUNNING);
   ASSERT (is_thread (next));
-  lock_acquire(&sleepLock);
-  int done = 0;
-  struct list_elem * current = sleep.waiters.head.next;
-  struct thread *t;
-  while(!done && (current != &((&sleep)->waiters.tail))){
-    t = list_entry(current, struct thread, elem);
-    if(timer_elapsed(t->start < t->ticks)){
-      done = 1;
-    }
-    else{
-      cond_signal(&sleep, &sleepLock);
-      list_push_back(&ready_list, &t->elem);
-      t->status = THREAD_READY;
-      current = sleep.waiters.head.next;
-    }
-  }
-  lock_release(&sleepLock);
-  if (cur != next)
-    prev = switch_threads (cur, next);
-  thread_schedule_tail (prev);
+
+  if(cur!= next) prev = switch_threads(cur, next); 
+  thread_schedule_tail(prev); 
 }
 
 /* Returns a tid to use for a new thread. */
