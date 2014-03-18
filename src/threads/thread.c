@@ -381,6 +381,10 @@ void
 thread_set_priority (int new_priority) 
 {
   thread_current ()->priority = new_priority;
+
+  /*Added*/
+  /*If current thread no longer has highest priority, yield */
+  
 }
 
 /* Returns the current thread's priority. */

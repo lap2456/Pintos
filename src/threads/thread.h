@@ -114,7 +114,12 @@ struct thread
 
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element. */
-    int64_t sleep_ticks; /*Number of ticks to sleep in timer_sleep()*/
+    
+    /*Added*/
+    int64_t sleep_ticks; /*Added. Number of ticks to sleep in timer_sleep()*/
+    int64_t original_priority; 
+    struct list donations; //list of threads also waiting on locks the thread has (possible priority donors)
+    
 
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
