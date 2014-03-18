@@ -621,6 +621,29 @@ allocate_tid (void)
   return tid;
 }
 
+/*moAdded - true if thread 'a' has HIGHER priority than 'b'*/
+static bool
+priority_greater (const struct list_elem *a_, const struct list_elem *b_,
+            void *aux UNUSED) 
+{
+  struct thread *a = list_entry (a_, struct thread, elem);
+  struct thread *b = list_entry (b_, struct thread, elem);
+  
+  return a->priority > b->priority;
+}
+
+/*moAdded - true if thread 'a' has LOWER priority than 'b'*/
+static bool
+priority_less (const struct list_elem *a_, const struct list_elem *b_,
+            void *aux UNUSED) 
+{
+  struct thread *a = list_entry (a_, struct thread, elem);
+  struct thread *b = list_entry (b_, struct thread, elem);
+  
+  return a->priority < b->priority;
+}
+
+
 /* Offset of `stack' member within `struct thread'.
    Used by switch.S, which can't figure it out on its own. */
 uint32_t thread_stack_ofs = offsetof (struct thread, stack);
