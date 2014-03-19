@@ -79,9 +79,9 @@ static tid_t allocate_tid (void);
 void go_to_sleep(int64_t ticks){
   struct thread *t = thread_current();
   enum intr_level old_level = intr_disable(); 
-  t->status = THREAD_WAITING; //about to be put to sleep 
+  t->status = THREAD_SLEEPING; //about to be put to sleep 
   t->sleep_ticks = ticks; //sets the current thread's number of sleep ticks  
-  list_push_back(&waiting_list, &t->elem); //add to waiting list 
+  list_push_back(&sleep_list, &t->elem); //add to waiting list 
   schedule(); 
   intr_set_level(old_level); //disable interrupts 
 }
@@ -105,7 +105,7 @@ thread_init (void)
 
   lock_init (&tid_lock);
   list_init (&ready_list);
-  list_init(&waiting_list); /*added*/
+  list_init(&sleep_list); /*added*/
   list_init (&all_list);
 
   /* Set up a thread structure for the running thread. */
@@ -141,7 +141,7 @@ thread_tick (void)
 
 
   /*added*/
-  struct list_elem *waitThread = list_begin(&waiting_list); 
+  struct list_elem *waitThread = list_begin(&sleep_list); 
   struct list_elem *temp; 
   struct thread *thr;  
 
@@ -156,15 +156,15 @@ thread_tick (void)
     kernel_ticks++;
 
   /*added*/
-  if(list_begin(&waiting_list)!=NULL){ //if waiting list is not empty
-    while(waitThread != list_end(&waiting_list)){ //cycle through list 
+  if(list_begin(&sleep_list)!=NULL){ //if waiting list is not empty
+    while(waitThread != list_end(&sleep_list)){ //cycle through list 
         temp = waitThread->next; //advance temp
         thr = list_entry(waitThread, struct thread, elem); //get thread
-        if(thr->sleep_ticks ==1){ //if only 1 sleep tick left 
+        thr->sleep_ticks = thr->sleep_ticks - 1; //decrement num. of ticks
+	if(thr->sleep_ticks ==0){ //time to wake up  
           list_remove(waitThread); //take off waiting list
-          list_push_back(&ready_list, &thr->elem); 
-        } else { //more than 1 sleep tick left 
-          thr->sleep_ticks = thr->sleep_ticks -1; //decrement # of ticks 
+          list_push_back(&ready_list, &thr->elem); //push on ready list
+	//THOUGHT: we should add to ready list so that front of list is first to be woken up
         }
         waitThread = temp; 
     }
@@ -244,6 +244,12 @@ thread_create (const char *name, int priority,
 
   /* Add to run queue. */
   thread_unblock (t);
+
+  /*added*/
+  //if new thread has a higher priority than current thread, current 
+  //thread must yield 
+  if(priority > thread_current ()->priority)
+    thread_yield(); 
 
   return tid;
 }
@@ -380,11 +386,25 @@ thread_foreach (thread_action_func *func, void *aux)
 void
 thread_set_priority (int new_priority) 
 {
-  thread_current ()->priority = new_priority;
-
   /*Added*/
   /*If current thread no longer has highest priority, yield */
-  
+  	intr_disable(); 
+	ASSERT(intr_get_level () == INTR_OFF); //interrupts need to be turned off so that we can get and/or update current thread's priority 
+
+	thread_current ()->priority = new_priority; 	
+
+	/*Added*/
+	intr_enable(); 
+
+  //Added
+  if(list_begin(&ready_list)!=NULL){
+    //if current thread no longer has highest priority, yield 
+    list_sort(&ready_list, priority_greater, NULL);
+    struct thread * front = list_entry(list_begin(&ready_list), struct thread, elem);  
+    if(thread_current ()->priority < front->priority){
+      thread_yield(); 
+    }
+  }
 }
 
 /* Returns the current thread's priority. */
@@ -509,6 +529,10 @@ init_thread (struct thread *t, const char *name, int priority)
   strlcpy (t->name, name, sizeof t->name);
   t->stack = (uint8_t *) t + PGSIZE;
   t->priority = priority;
+
+  /*added*/ 
+  t->original_priority = priority; 
+
   t->magic = THREAD_MAGIC;
   list_push_back (&all_list, &t->allelem);
 }
@@ -537,7 +561,9 @@ next_thread_to_run (void)
   if (list_empty (&ready_list))
     return idle_thread;
   else
-    return list_entry (list_pop_front (&ready_list), struct thread, elem);
+    //return list_entry (list_pop_front (&ready_list), struct thread, elem);
+    list_sort(&ready_list, priority_greater, NULL); 
+    return list_entry(list_pop_front(&ready_list), struct thread, elem); 
 }
 
 /* Completes a thread switch by activating the new thread's page
@@ -621,27 +647,7 @@ allocate_tid (void)
   return tid;
 }
 
-/*moAdded - true if thread 'a' has HIGHER priority than 'b'*/
-static bool
-priority_greater (const struct list_elem *a_, const struct list_elem *b_,
-            void *aux UNUSED) 
-{
-  struct thread *a = list_entry (a_, struct thread, elem);
-  struct thread *b = list_entry (b_, struct thread, elem);
-  
-  return a->priority > b->priority;
-}
 
-/*moAdded - true if thread 'a' has LOWER priority than 'b'*/
-static bool
-priority_less (const struct list_elem *a_, const struct list_elem *b_,
-            void *aux UNUSED) 
-{
-  struct thread *a = list_entry (a_, struct thread, elem);
-  struct thread *b = list_entry (b_, struct thread, elem);
-  
-  return a->priority < b->priority;
-}
 
 
 /* Offset of `stack' member within `struct thread'.

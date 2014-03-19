@@ -68,7 +68,11 @@ sema_down (struct semaphore *sema)
   old_level = intr_disable ();
   while (sema->value == 0) 
     {
-      list_push_back (&sema->waiters, &running_thread ()->elem);
+      list_push_back (&sema->waiters, &thread_current ()->elem);
+      /*KG added*/ 
+      //insert in order of priority 
+      //list_insert_ordered(&sema->waiters, &thread_current ()->elem, priority_greater, NULL);
+
       thread_block ();
     }
   sema->value--;
@@ -181,6 +185,22 @@ lock_init (struct lock *lock)
   sema_init (&lock->semaphore, 1);
 }
 
+/*added*/
+void donate_lock(struct lock* needed_lock){
+  
+  if(needed_lock->holder != NULL) {
+      struct thread * owner = needed_lock ->holder; 
+      struct thread * curr = thread_current (); 
+
+      if(curr->priority > owner->priority) {
+        //priority needs to be donated 
+        thread_set_priority(curr->priority);   
+
+      }
+  }
+
+}
+
 /* Acquires LOCK, sleeping until it becomes available if
    necessary.  The lock must not already be held by the current
    thread.
@@ -196,8 +216,16 @@ lock_acquire (struct lock *lock)
   ASSERT (!intr_context ());
   ASSERT (!lock_held_by_current_thread (lock));
 
+  /*added*/
+  thread_current () ->waitingLock = lock; 
+  
+
   sema_down (&lock->semaphore);
-  lock->holder = running_thread();
+  lock->holder = thread_current ();
+
+  /*added*/
+  thread_current ()->waitingLock = NULL; //no longer waiting on lock 
+  
 }
 
 /* Tries to acquires LOCK and returns true if successful or false
@@ -243,7 +271,7 @@ lock_held_by_current_thread (const struct lock *lock)
 {
   ASSERT (lock != NULL);
 
-  return lock->holder == running_thread ();
+  return lock->holder == thread_current ();
 }
 
 /* One semaphore in a list. */

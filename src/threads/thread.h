@@ -14,13 +14,15 @@
 #include <list.h>
 #include <stdint.h>
 
+
+
 /* List of processes in THREAD_READY state, that is, processes
    that are ready to run but not actually running. */
 static struct list ready_list;
 
 /*Added. List of processes in THREAD_WAITING state, meaning
-  they are placed on the waiting_list */
-static struct list waiting_list; 
+  they are placed on the sleep_list */
+static struct list sleep_list; 
 
 
 /* States in a thread's life cycle. */
@@ -31,7 +33,7 @@ enum thread_status
     THREAD_BLOCKED,     /* Waiting for an event to trigger. */
     THREAD_DYING,        /* About to be destroyed. */
 
-    THREAD_WAITING     /*added; thread about to be put to sleep*/
+    THREAD_SLEEPING     /*KG added; thread put to sleep*/
   };
 
 /* Thread identifier type.
@@ -117,9 +119,10 @@ struct thread
     
     /*Added*/
     int64_t sleep_ticks; /*Added. Number of ticks to sleep in timer_sleep()*/
-    int64_t original_priority; 
+    int64_t original_priority; //original priority (non donated) of thread  
     struct list donations; //list of threads also waiting on locks the thread has (possible priority donors)
-    
+    struct lock *waitingLock; //the lock the thread is waiting for (or NULL if thread not waiting on a lock)
+	struct list_elem donate_elem; //thread list element. can be added to another thread's donation list. 
 
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
@@ -168,4 +171,28 @@ int thread_get_recent_cpu (void);
 int thread_get_load_avg (void);
 
 void go_to_sleep(int64_t ticks); /*added*/ 
+
+
+/*moAdded - true if thread 'a' has HIGHER priority than 'b'*/
+static bool
+priority_greater (const struct list_elem *a_, const struct list_elem *b_,
+            void *aux UNUSED) 
+{
+  struct thread *a = list_entry (a_, struct thread, elem);
+  struct thread *b = list_entry (b_, struct thread, elem);
+  
+  return (a->priority > b->priority);
+}
+
+/*moAdded - true if thread 'a' has LOWER priority than 'b'*/
+static bool
+priority_less (const struct list_elem *a_, const struct list_elem *b_,
+            void *aux UNUSED) 
+{
+  struct thread *a = list_entry (a_, struct thread, elem);
+  struct thread *b = list_entry (b_, struct thread, elem);
+  
+  return a->priority < b->priority;
+}
+
 #endif /* threads/thread.h */
