@@ -221,6 +221,7 @@ thread_create (const char *name, int priority,
   /* Initialize thread. */
   init_thread (t, name, priority);
   tid = t->tid = allocate_tid ();
+  t->priority = priority;
 
   /* Prepare thread for first run by initializing its stack.
      Do this atomically so intermediate values for the 'stack' 
@@ -245,16 +246,15 @@ thread_create (const char *name, int priority,
   intr_set_level (old_level);
 
   /* Add to run queue. */
-  thread_unblock (t);
+  thread_unblock(t);
 
-  /*added*/
-  t->priority = priority; 
+  /*added*/ 
   //if new thread has a higher priority than current thread, current 
   //thread must yield 
   if(priority > thread_current ()->priority)
     thread_yield();
-
-
+  
+ 
   return tid;
 }
 
@@ -297,9 +297,16 @@ thread_unblock (struct thread *t)
   /*added*/
   list_insert_ordered(&ready_list, &t->elem, priority_greater, NULL);
 
-
-
   t->status = THREAD_READY;
+
+  if((thread_current () ->priority < t->priority) && (thread_current () != idle_thread)){
+    if(intr_context ())
+      intr_yield_on_return (); 
+    else
+      thread_yield ();
+  }
+
+
   intr_set_level (old_level);
 }
 
@@ -396,7 +403,7 @@ thread_foreach (thread_action_func *func, void *aux)
 
 /* Sets the current thread's priority to NEW_PRIORITY. */
 void
-thread_set_priority (int new_priority) 
+thread_set_priority (uint64_t new_priority) 
 {
   /*Added*/
   /*If current thread no longer has highest priority, yield */
@@ -423,9 +430,7 @@ thread_set_priority (int new_priority)
 int
 thread_get_priority (void) 
 {
-  if(thread_current()->numDonations>0){
-    return list_entry(list_begin(&thread_current ()->donations), struct thread, elem)->priority; 
-  }
+
   return thread_current ()->priority;
 }
 

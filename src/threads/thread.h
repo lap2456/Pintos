@@ -111,7 +111,7 @@ struct thread
     enum thread_status status;          /* Thread state. */
     char name[16];                      /* Name (for debugging purposes). */
     uint8_t *stack;                     /* Saved stack pointer. */
-    int priority;                       /* Priority. */
+    uint64_t priority;                       /* Priority. */
     struct list_elem allelem;           /* List element for all threads list. */
 
     /* Shared between thread.c and synch.c. */
@@ -122,6 +122,7 @@ struct thread
     int64_t original_priority; //original priority (non donated) of thread
     int numDonations; //number of donations that have not been recalled   
     struct list donations; //list of threads that have donated to this lock 
+    struct list_elem donationElem;
     struct lock *waitingLock; //the lock the thread is waiting for (or NULL if thread not waiting on a lock)
 	
 #ifdef USERPROG
@@ -163,7 +164,7 @@ typedef void thread_action_func (struct thread *t, void *aux);
 void thread_foreach (thread_action_func *, void *);
 
 int thread_get_priority (void);
-void thread_set_priority (int);
+void thread_set_priority (uint64_t);
 
 int thread_get_nice (void);
 void thread_set_nice (int);
@@ -172,6 +173,8 @@ int thread_get_load_avg (void);
 
 void go_to_sleep(int64_t ticks); /*added*/ 
 
+
+static void schedule(void);
 
 /*moAdded - true if thread 'a' has HIGHER priority than 'b'*/
 static bool
