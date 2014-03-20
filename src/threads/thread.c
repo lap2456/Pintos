@@ -163,7 +163,7 @@ thread_tick (void)
         thr->sleep_ticks = thr->sleep_ticks - 1; //decrement num. of ticks
 	if(thr->sleep_ticks ==0){ //time to wake up  
           list_remove(waitThread); //take off waiting list
-          list_push_back(&ready_list, &thr->elem); //push on ready list
+          list_insert_ordered(&ready_list, &thr->elem, priority_greater, NULL);
 	//THOUGHT: we should add to ready list so that front of list is first to be woken up
         }
         waitThread = temp; 
@@ -246,7 +246,6 @@ thread_create (const char *name, int priority,
   thread_unblock (t);
 
   /*added*/
-  list_init(&thread_current()->locks);
   //if new thread has a higher priority than current thread, current 
   //thread must yield 
   if(priority > thread_current ()->priority)
@@ -293,6 +292,7 @@ thread_unblock (struct thread *t)
 
   /*added*/
   list_insert_ordered(&ready_list, &t->elem, priority_greater, NULL);
+  list_sort(&ready_list, priority_greater, NULL);
 
 
   t->status = THREAD_READY;
@@ -539,6 +539,7 @@ init_thread (struct thread *t, const char *name, int priority)
 
   /*added*/ 
   t->original_priority = priority; 
+  list_init(&t->donations); 
   t->numDonations = 0; 
 
   t->magic = THREAD_MAGIC;

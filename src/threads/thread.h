@@ -121,10 +121,9 @@ struct thread
     int64_t sleep_ticks; /*Added. Number of ticks to sleep in timer_sleep()*/
     int64_t original_priority; //original priority (non donated) of thread
     int numDonations; //number of donations that have not been recalled   
-    struct list donations; //list of threads also waiting on locks the thread has (possible priority donors)
+    struct list donations; //list of threads that have donated to this lock 
     struct lock *waitingLock; //the lock the thread is waiting for (or NULL if thread not waiting on a lock)
-	 struct list locks; //list of locks the thread has 
-
+	
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
     uint32_t *pagedir;                  /* Page directory. */
