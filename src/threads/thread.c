@@ -164,6 +164,8 @@ thread_tick (void)
 	if(thr->sleep_ticks ==0){ //time to wake up  
           list_remove(waitThread); //take off waiting list
           list_insert_ordered(&ready_list, &thr->elem, priority_greater, NULL);
+
+          
 	//THOUGHT: we should add to ready list so that front of list is first to be woken up
         }
         waitThread = temp; 
@@ -246,10 +248,12 @@ thread_create (const char *name, int priority,
   thread_unblock (t);
 
   /*added*/
+  t->priority = priority; 
   //if new thread has a higher priority than current thread, current 
   //thread must yield 
   if(priority > thread_current ()->priority)
-    thread_yield(); 
+    thread_yield();
+
 
   return tid;
 }
@@ -292,7 +296,7 @@ thread_unblock (struct thread *t)
 
   /*added*/
   list_insert_ordered(&ready_list, &t->elem, priority_greater, NULL);
-  list_sort(&ready_list, priority_greater, NULL);
+
 
 
   t->status = THREAD_READY;
@@ -367,6 +371,7 @@ thread_yield (void)
   if (cur != idle_thread) 
     list_insert_ordered(&ready_list, &cur->elem, priority_greater, NULL);
     //list_push_back (&ready_list, &cur->elem);
+  list_sort(&ready_list, priority_greater, NULL);
   cur->status = THREAD_READY;
   schedule ();
   intr_set_level (old_level);
@@ -399,7 +404,7 @@ thread_set_priority (int new_priority)
 	ASSERT(intr_get_level () == INTR_OFF); //interrupts need to be turned off so that we can get and/or update current thread's priority 
 
 	thread_current ()->priority = new_priority; 	
-
+  list_sort(&ready_list, priority_greater, NULL);
 	/*Added*/
 	intr_enable(); 
 
@@ -418,6 +423,9 @@ thread_set_priority (int new_priority)
 int
 thread_get_priority (void) 
 {
+  if(thread_current()->numDonations>0){
+    return list_entry(list_begin(&thread_current ()->donations), struct thread, elem)->priority; 
+  }
   return thread_current ()->priority;
 }
 
@@ -569,10 +577,11 @@ next_thread_to_run (void)
 {
   if (list_empty (&ready_list))
     return idle_thread;
-  else
+  else{
     //return list_entry (list_pop_front (&ready_list), struct thread, elem);
     list_sort(&ready_list, priority_greater, NULL); 
     return list_entry(list_pop_front(&ready_list), struct thread, elem); 
+  }
 }
 
 /* Completes a thread switch by activating the new thread's page

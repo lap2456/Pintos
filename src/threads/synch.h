@@ -43,7 +43,7 @@ bool lock_held_by_current_thread (const struct lock *);
 
 /*added*/
 void lock_release_donation(struct lock * lock);
-void donate_lock(struct lock *lock);
+void donate_priority(struct lock *lock);
 
 
 
