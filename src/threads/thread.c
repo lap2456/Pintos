@@ -246,6 +246,7 @@ thread_create (const char *name, int priority,
   thread_unblock (t);
 
   /*added*/
+  list_init(&thread_current()->locks);
   //if new thread has a higher priority than current thread, current 
   //thread must yield 
   if(priority > thread_current ()->priority)
@@ -288,7 +289,12 @@ thread_unblock (struct thread *t)
 
   old_level = intr_disable ();
   ASSERT (t->status == THREAD_BLOCKED);
-  list_push_back (&ready_list, &t->elem);
+  //list_push_back (&ready_list, &t->elem);
+
+  /*added*/
+  list_insert_ordered(&ready_list, &t->elem, priority_greater, NULL);
+
+
   t->status = THREAD_READY;
   intr_set_level (old_level);
 }
@@ -359,7 +365,8 @@ thread_yield (void)
 
   old_level = intr_disable ();
   if (cur != idle_thread) 
-    list_push_back (&ready_list, &cur->elem);
+    list_insert_ordered(&ready_list, &cur->elem, priority_greater, NULL);
+    //list_push_back (&ready_list, &cur->elem);
   cur->status = THREAD_READY;
   schedule ();
   intr_set_level (old_level);
@@ -532,6 +539,7 @@ init_thread (struct thread *t, const char *name, int priority)
 
   /*added*/ 
   t->original_priority = priority; 
+  t->numDonations = 0; 
 
   t->magic = THREAD_MAGIC;
   list_push_back (&all_list, &t->allelem);
