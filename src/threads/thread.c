@@ -163,7 +163,7 @@ thread_tick (void)
         thr->sleep_ticks = thr->sleep_ticks - 1; //decrement num. of ticks
 	if(thr->sleep_ticks ==0){ //time to wake up  
           list_remove(waitThread); //take off waiting list
-          list_insert_ordered(&ready_list, &thr->elem, priority_greater, NULL);
+          list_insert_ordered(&ready_list, &thr->elem, (list_less_func *) &priority_greater, NULL);
 
           
 	//THOUGHT: we should add to ready list so that front of list is first to be woken up
@@ -295,7 +295,7 @@ thread_unblock (struct thread *t)
   //list_push_back (&ready_list, &t->elem);
 
   /*added*/
-  list_insert_ordered(&ready_list, &t->elem, priority_greater, NULL);
+  list_insert_ordered(&ready_list, &t->elem, (list_less_func *) &priority_greater, NULL);
 
   t->status = THREAD_READY;
 
@@ -305,8 +305,6 @@ thread_unblock (struct thread *t)
     else
       thread_yield ();
   }
-
-
   intr_set_level (old_level);
 }
 
@@ -376,9 +374,9 @@ thread_yield (void)
 
   old_level = intr_disable ();
   if (cur != idle_thread) 
-    list_insert_ordered(&ready_list, &cur->elem, priority_greater, NULL);
+    list_insert_ordered(&ready_list, &cur->elem, (list_less_func *) &priority_greater, NULL);
     //list_push_back (&ready_list, &cur->elem);
-  list_sort(&ready_list, priority_greater, NULL);
+  list_sort(&ready_list, (list_less_func *) &priority_greater, NULL);
   cur->status = THREAD_READY;
   schedule ();
   intr_set_level (old_level);
@@ -411,17 +409,20 @@ thread_set_priority (uint64_t new_priority)
 	ASSERT(intr_get_level () == INTR_OFF); //interrupts need to be turned off so that we can get and/or update current thread's priority 
 
 	thread_current ()->priority = new_priority; 	
-  list_sort(&ready_list, priority_greater, NULL);
+  list_sort(&ready_list, (list_less_func *) &priority_greater, NULL);
 	/*Added*/
 	intr_enable(); 
 
   //Added
   if(list_begin(&ready_list)!=NULL){
     //if current thread no longer has highest priority, yield 
-    list_sort(&ready_list, priority_greater, NULL);
+    list_sort(&ready_list, (list_less_func *) &priority_greater, NULL);
     struct thread * front = list_entry(list_begin(&ready_list), struct thread, elem);  
     if(thread_current ()->priority < front->priority){
-      thread_yield(); 
+      if(intr_context())
+        intr_yield_on_return();
+      else 
+        thread_yield(); 
     }
   }
 }
@@ -584,7 +585,7 @@ next_thread_to_run (void)
     return idle_thread;
   else{
     //return list_entry (list_pop_front (&ready_list), struct thread, elem);
-    list_sort(&ready_list, priority_greater, NULL); 
+    list_sort(&ready_list, (list_less_func *) &priority_greater, NULL); 
     return list_entry(list_pop_front(&ready_list), struct thread, elem); 
   }
 }
