@@ -658,15 +658,6 @@ schedule (void)
 
   if(cur!= next) prev = switch_threads(cur, next); 
   thread_schedule_tail(prev);
-
-  struct list_elem * e;
-  /*for (e = list_begin (&ready_list); e != list_end (&ready_list);
-           e = list_next (e))
-        {
-          struct thread *t = list_entry (e, struct thread, elem);
-          printf("%s\t", t->name);
-        }
-  */
 }
 
 /* Returns a tid to use for a new thread. */

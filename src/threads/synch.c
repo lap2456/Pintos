@@ -72,10 +72,7 @@ sema_down (struct semaphore *sema)
       list_push_front (&sema->waiters, &thread_current ()->elem);
       /*KG added*/ 
       //insert in order of priority so that highest priority thread can be woken up first
-      //list_insert_ordered(&sema->waiters, &thread_current ()->elem, (list_less_func *) &priority_greater, NULL);
-      //list_sort(&sema->waiters, priority_greater, NULL);
       sema->max = list_entry(list_begin(&sema->waiters), struct thread, elem);
-
       thread_block ();
     }
   sema->value--;
@@ -122,25 +119,21 @@ sema_up (struct semaphore *sema)
   old_level = intr_disable ();
   if (!list_empty (&sema->waiters)) {
     list_sort(&sema->waiters, (list_less_func *) &priority_greater, NULL);
-    thread_unblock (list_entry (list_pop_front (&sema->waiters),
-                                struct thread, elem));
+    thread_unblock (list_entry (list_pop_front (&sema->waiters), struct thread, elem));
   }
   sema->value++;
 
   /*added*/
-<<<<<<< HEAD
   if(thread_current () ->priority < list_entry(list_begin(&ready_list), struct thread, elem)){
    if(!intr_context())
       thread_yield();
-    else intr_yield_on_return();  
+    //else intr_yield_on_return();  
   }
-=======
   //if(!intr_context()){
   //  if(thread_current () ->priority < list_entry(list_begin(&ready_list), struct thread, elem)->priority){
   //    thread_yield();
   // }
   //}
->>>>>>> 6e0bd7df97a5ed03a196d208f552d7776d73f616
   intr_set_level (old_level);
 
 
@@ -210,13 +203,12 @@ lock_init (struct lock *lock)
 void donate_priority(struct lock* needed_lock){
   struct thread *t = thread_current(); 
   struct thread * owner = needed_lock ->holder;
- 	list_push_front(&owner->donations, &t->donationElem); 
-	while(needed_lock!=NULL){
-	if (owner->priority >= t->priority) return; 
-  //priority needs to be donated 
-  owner->numDonations+=1; 
-  owner->priority = t->priority; 
-	needed_lock = t->waitingLock;     
+  if(t->priority > owner->priority){
+    //priority needs to be donated 
+    owner->numDonations+=1; 
+    owner->priority = t->priority; 
+	  needed_lock = t->waitingLock;  
+    list_push_front(&owner->donations, &t->donationElem);  
 	}
 }
 
@@ -239,15 +231,8 @@ lock_acquire (struct lock *lock)
   thread_current () ->waitingLock = lock; 
 
   if(lock->holder != NULL){
-<<<<<<< HEAD
-   //if(thread_current () ->priority > lock->holder->priority){
-    donate_priority(lock); 
-    //}
-=======
-	   if(thread_current () ->priority > lock->holder->priority){
+	   if(thread_current () ->priority > lock->holder->priority)
       donate_priority(lock); 
-    }
->>>>>>> 6e0bd7df97a5ed03a196d208f552d7776d73f616
   }
   sema_down (&lock->semaphore);
   lock->holder = thread_current ();
