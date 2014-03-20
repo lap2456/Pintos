@@ -81,7 +81,7 @@ void go_to_sleep(int64_t ticks){
   enum intr_level old_level = intr_disable(); 
   t->status = THREAD_SLEEPING; //about to be put to sleep 
   t->sleep_ticks = ticks; //sets the current thread's number of sleep ticks  
-  list_push_back(&sleep_list, &t->elem); //add to waiting list 
+  list_push_back(&sleep_list, &t->sleepElem); //add to waiting list 
   schedule(); 
   intr_set_level(old_level); //disable interrupts 
 }
@@ -107,6 +107,7 @@ thread_init (void)
   list_init (&ready_list);
   list_init(&sleep_list); /*added*/
   list_init (&all_list);
+
 
   /* Set up a thread structure for the running thread. */
   initial_thread = running_thread ();
@@ -159,7 +160,7 @@ thread_tick (void)
   if(list_begin(&sleep_list)!=NULL){ //if waiting list is not empty
     while(waitThread != list_end(&sleep_list)){ //cycle through list 
         temp = waitThread->next; //advance temp
-        thr = list_entry(waitThread, struct thread, elem); //get thread
+        thr = list_entry(waitThread, struct thread, sleepElem); //get thread
         thr->sleep_ticks = thr->sleep_ticks - 1; //decrement num. of ticks
 	if(thr->sleep_ticks ==0){ //time to wake up  
           list_remove(waitThread); //take off waiting list
@@ -410,8 +411,7 @@ thread_set_priority (uint64_t new_priority)
 
 	thread_current ()->priority = new_priority; 	
   list_sort(&ready_list, (list_less_func *) &priority_greater, NULL);
-	/*Added*/
-	intr_enable(); 
+
 
   //Added
   if(list_begin(&ready_list)!=NULL){
@@ -425,6 +425,9 @@ thread_set_priority (uint64_t new_priority)
         thread_yield(); 
     }
   }
+
+    /*Added*/
+  intr_enable(); 
 }
 
 /* Returns the current thread's priority. */
@@ -553,7 +556,7 @@ init_thread (struct thread *t, const char *name, int priority)
 
   /*added*/ 
   t->original_priority = priority; 
-  list_init(&t->donations); 
+  list_init(&(t->donations)); 
   t->numDonations = 0; 
 
   t->magic = THREAD_MAGIC;
@@ -654,7 +657,16 @@ schedule (void)
   ASSERT (is_thread (next));
 
   if(cur!= next) prev = switch_threads(cur, next); 
-  thread_schedule_tail(prev); 
+  thread_schedule_tail(prev);
+
+  struct list_elem * e;
+  /*for (e = list_begin (&ready_list); e != list_end (&ready_list);
+           e = list_next (e))
+        {
+          struct thread *t = list_entry (e, struct thread, elem);
+          printf("%s\t", t->name);
+        }
+  */
 }
 
 /* Returns a tid to use for a new thread. */
