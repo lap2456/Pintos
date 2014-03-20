@@ -123,6 +123,7 @@ struct thread
     int numDonations; //number of donations that have not been recalled   
     struct list donations; //list of threads that have donated to this lock 
     struct list_elem donationElem;
+    struct list_elem sleepElem; 
     struct lock *waitingLock; //the lock the thread is waiting for (or NULL if thread not waiting on a lock)
 	
 #ifdef USERPROG
@@ -174,7 +175,6 @@ int thread_get_load_avg (void);
 void go_to_sleep(int64_t ticks); /*added*/ 
 
 
-static void schedule(void);
 
 /*moAdded - true if thread 'a' has HIGHER priority than 'b'*/
 static bool
