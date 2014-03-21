@@ -252,7 +252,7 @@ thread_create (const char *name, int priority,
   /*added*/ 
   //if new thread has a higher priority than current thread, current 
   //thread must yield 
-  if(priority > thread_current ()->priority)
+  // if(priority > thread_current ()->priority)
     thread_yield();
   
  
@@ -374,7 +374,7 @@ thread_yield (void)
   ASSERT (!intr_context ());
 
   old_level = intr_disable ();
-  if (cur != idle_thread) 
+  // if (cur != idle_thread) 
     list_insert_ordered(&ready_list, &cur->elem, (list_less_func *) &priority_greater, NULL);
     //list_push_back (&ready_list, &cur->elem);
   list_sort(&ready_list, (list_less_func *) &priority_greater, NULL);
@@ -409,7 +409,8 @@ thread_set_priority (uint64_t new_priority)
   	intr_disable(); 
 	ASSERT(intr_get_level () == INTR_OFF); //interrupts need to be turned off so that we can get and/or update current thread's priority 
 
-	thread_current ()->priority = new_priority; 	
+	thread_current ()->priority = new_priority;
+  thread_current() ->original_priority = new_priority; //added
   list_sort(&ready_list, (list_less_func *) &priority_greater, NULL);
 
 

@@ -70,6 +70,8 @@ sema_down (struct semaphore *sema)
       //list_push_back (&sema->waiters, &thread_current ()->elem);
       /*KG added*/ 
       //insert in order of priority so that highest priority thread can be woken up first
+      //MORG: say the thread does this once and blocks. if it wakes up and comes into this loop is the same thread readded?
+      //  was the waiter list totally emptied every time the sema is available and then all threads are put back in here when they try to get the sema again?
       list_insert_ordered(&sema->waiters, &thread_current ()->elem, (list_less_func *) &priority_greater, NULL);
 
       //list_sort(&sema->waiters, priority_greater, NULL);
@@ -118,19 +120,27 @@ sema_up (struct semaphore *sema)
   ASSERT (sema != NULL);
 
   old_level = intr_disable ();
+
+  sema->value++;
+
   if (!list_empty (&sema->waiters)) {
     list_sort(&sema->waiters, (list_less_func *) &priority_greater, NULL);
     thread_unblock (list_entry (list_pop_front (&sema->waiters),
                                 struct thread, elem));
   }
-  sema->value++;
+  
+  // sema->value++;
 
-  /*added*/
-  if(!intr_context()){
-    if(thread_current () ->priority < list_entry(list_begin(&ready_list), struct thread, elem)){
-      thread_yield();
-   }
-  }
+  /*added*/ 
+  // if(!intr_context()){
+  //   //moAdded: so this if below doesnt compare 2 priorities (the second one isnt referencing its priority)
+  //   //when i add ->priority to the end even the first alarm test deadlocks 
+  //   if(thread_current () ->priority < list_entry(list_front(&ready_list), struct thread, elem)){ 
+  //     thread_yield();
+  //  }
+  // }
+
+  
   intr_set_level (old_level);
 
 
@@ -377,6 +387,8 @@ cond_signal (struct condition *cond, struct lock *lock UNUSED)
   ASSERT (!intr_context ());
   ASSERT (lock_held_by_current_thread (lock));
 
+  list_sort(&cond->waiters, priority_greater_cond, NULL);
+
   if (!list_empty (&cond->waiters)) 
     sema_up (&list_entry (list_pop_front (&cond->waiters),
                           struct semaphore_elem, elem)->semaphore);
@@ -396,4 +408,15 @@ cond_broadcast (struct condition *cond, struct lock *lock)
 
   while (!list_empty (&cond->waiters))
     cond_signal (cond, lock);
+}
+
+//moAdded: used to compare each semaphore's max priority threads (to order the semaphore_elems in the cond_var waiters list)
+static bool
+priority_greater_cond (const struct list_elem *a_, const struct list_elem *b_,
+            void *aux UNUSED) 
+{
+  struct semaphore_elem *a = list_entry (a_, struct semaphore_elem, elem);
+  struct semaphore_elem *b = list_entry (b_, struct semaphore_elem, elem);
+  
+  return (a->semaphore.max->priority > b->semaphore.max->priority);
 }
