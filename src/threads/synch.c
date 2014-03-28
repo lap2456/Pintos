@@ -208,16 +208,19 @@ lock_init (struct lock *lock)
 }
 
 /*added*/
-void donate_priority(struct lock* needed_lock){
-  struct thread *t = thread_current(); 
+//only called when the current thread's priority is greater than the thread that holds the lock
+void 
+donate_priority(struct lock* needed_lock)
+{
+  struct thread *t = thread_current();
   struct thread * owner = needed_lock ->holder;
-  if(t->priority > owner->priority) {
-    //priority needs to be donated 
-    owner->numDonations+=1; 
-    owner->priority = t->priority; 
-    list_push_front(&owner->donations, &t->donationElem); 
+  owner->priority = t->priority; 
+  owner->numDonations += 1;
+  list_push_front(&owner->donations, &t->donationElem);
+  while(owner->waitingLock){
+    owner = owner->waitingLock->holder;
+    owner->priority = t->priority;
   }
-
 }
 
 
@@ -244,10 +247,8 @@ lock_acquire (struct lock *lock)
     }
   }
 
-
   sema_down (&lock->semaphore);
   lock->holder = thread_current ();
-
   /*added*/ 
   thread_current ()->waitingLock = NULL; //no longer waiting on lock 
 
@@ -275,14 +276,25 @@ lock_try_acquire (struct lock *lock)
 }
 
 void lock_release_donation(struct lock * lock){
-  list_pop_front(&lock->holder->donations);
-  lock->holder->numDonations-=1; 
-  if(lock->holder->numDonations==0){
-     lock->holder->priority = lock->holder->original_priority;
-  } else {
-   thread_set_priority(list_entry(list_begin(&lock->holder->donations), struct thread, donationElem)->priority);
+  struct thread *owner = lock->holder;
+  struct list_elem *e = list_begin (&owner->donations);
+  struct list_elem *next;
+  while (e != list_end(&owner->donations))
+  {
+	next = list_next(e);
+	struct thread *t = list_entry(e, struct thread, donationElem);
+	   if(t->waitingLock == lock){
+		    list_remove(e);
+		    owner->numDonations -= 1;
+	   }
+	e = next;
   }
-
+  if(list_empty(&owner->donations))
+	owner -> priority = owner-> original_priority;
+  else{
+	struct thread *t = list_entry(list_begin(&owner->donations), struct thread, donationElem);
+	owner -> priority = t -> priority;
+  }
 }
 
 /* Releases LOCK, which must be owned by the current thread.

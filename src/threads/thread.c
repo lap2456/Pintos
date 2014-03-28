@@ -244,18 +244,11 @@ thread_create (const char *name, int priority,
   sf->eip = switch_entry;
   sf->ebp = 0;
 
-  intr_set_level (old_level);
-
   /* Add to run queue. */
   thread_unblock(t);
 
-  /*added*/ 
-  //if new thread has a higher priority than current thread, current 
-  //thread must yield 
-  // if(priority > thread_current ()->priority)
-    thread_yield();
-  
- 
+  intr_set_level (old_level);
+
   return tid;
 }
 
@@ -300,7 +293,7 @@ thread_unblock (struct thread *t)
 
   t->status = THREAD_READY;
 
-  if((thread_current () ->priority < t->priority) && (thread_current () != idle_thread)){
+  if((thread_current()->priority < t->priority) && (thread_current() != idle_thread)){
     if(intr_context ())
       intr_yield_on_return (); 
     else
@@ -408,8 +401,8 @@ thread_set_priority (uint64_t new_priority)
   /*If current thread no longer has highest priority, yield */
   	intr_disable(); 
 	ASSERT(intr_get_level () == INTR_OFF); //interrupts need to be turned off so that we can get and/or update current thread's priority 
-
-	thread_current ()->priority = new_priority;
+  if(thread_current() ->numDonations == 0)
+	   thread_current ()->priority = new_priority;
   thread_current() ->original_priority = new_priority; //added
   list_sort(&ready_list, (list_less_func *) &priority_greater, NULL);
 
