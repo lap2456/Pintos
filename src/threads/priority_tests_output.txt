@@ -1,0 +1,48 @@
+-------------------------------------------
+PRIORITY-CHANGE 
+
+make: `build/tests/threads/priority-change.result' is up to date.
+-------------------------------------------
+PRIORITY-DONATE-ONE 
+
+make: `build/tests/threads/priority-donate-one.result' is up to date.
+-------------------------------------------
+PRIORITY-DONATE-MULTIPLE 
+
+make: `build/tests/threads/priority-donate-multiple.result' is up to date.
+-------------------------------------------
+PRIORITY-DONATE-MULTIPLE2 
+
+make: `build/tests/threads/priority-donate-multiple2.result' is up to date.
+-------------------------------------------
+PRIORITY-DONATE-NEST 
+
+make: `build/tests/threads/priority-donate-nest.result' is up to date.
+-------------------------------------------
+PRIORITY-DONATE-SEMA 
+
+make: `build/tests/threads/priority-donate-sema.result' is up to date.
+-------------------------------------------
+PRIORITY-DONATE-LOWER 
+
+make: `build/tests/threads/priority-donate-lower.result' is up to date.
+-------------------------------------------
+PRIORITY-FIFO 
+
+make: `build/tests/threads/priority-fifo.result' is up to date.
+-------------------------------------------
+PRIORITY-PREEMPT 
+
+make: `build/tests/threads/priority-preempt.result' is up to date.
+-------------------------------------------
+PRIORITY-SEMA 
+
+make: `build/tests/threads/priority-sema.result' is up to date.
+-------------------------------------------
+PRIORITY-CONDVAR 
+
+make: `build/tests/threads/priority-condvar.result' is up to date.
+-------------------------------------------
+PRIORITY-DONATE-CHAIN 
+
+make: `build/tests/threads/priority-donate-chain.result' is up to date.
