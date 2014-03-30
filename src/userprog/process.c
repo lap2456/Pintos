@@ -21,6 +21,7 @@
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
 
+void * phys; 
 /* Starts a new thread running a user program loaded from
    FILENAME.  The new thread may be scheduled (and may even exit)
    before process_execute() returns.  Returns the new process's
@@ -32,15 +33,74 @@ process_execute (const char *file_name)
   char *fn_copy;
   tid_t tid;
 
+
+  int diff; 
+  void * pointer;
+  char *save_ptr2, *name;
+  char *token, *save_ptr, *save_ptr3; 
+  int counter = 0; 
+
   /* Make a copy of FILE_NAME.
      Otherwise there's a race between the caller and load(). */
   fn_copy = palloc_get_page (0);
   if (fn_copy == NULL)
     return TID_ERROR;
-  strlcpy (fn_copy, file_name, PGSIZE);
+
+  int length = strlen(file_name);
+  strlcpy (fn_copy, file_name, length+1);
+
+
+  /*added*/
+  /*now it parses through again and pushes arugments to stack*/
+  counter = 0; 
+  length = strlen(file_name);
+  phys = PHYS_BASE; 
+  pointer = phys-1;  
+  for(token = strtok_r(fn_copy, " ", &save_ptr2); token != NULL;
+    token = strtok_r(NULL, " ", &save_ptr2)){
+    counter+=1; 
+    length = strlen(token);
+    length +=1; 
+    pointer -=length; 
+    memcpy(pointer, token, length); //adding argument strings
+  }
+
+
+  /*added*/
+  diff = phys - pointer; //how many bytes we have allocated for args
+  diff = diff%4; //word alignment
+  pointer -= (4-diff); //word alignment
+  pointer -= 4; //null pointer 
+  int * zero = NULL;
+  memcpy(pointer, zero, 4); //4 null bytes?
+
+  strlcpy(fn_copy, file_name, length); 
+  pointer -= 4*counter;
+  /*now need to push addresses on*/
+  for(token = strtok_r(fn_copy, " ", &save_ptr); token != NULL;
+    token = strtok_r(NULL, " ", &save_ptr)){
+    length = strlen(token);
+    length+=1; //to account for null termination
+    phys = phys-length;  
+    memcpy(pointer, phys, 4); //copy address of PHYS_BASE to pointer location
+    pointer += 4;
+  }  
+  pointer -= 4*counter;  
+
+  phys = pointer;
+  pointer -=4; 
+  memcpy(pointer, phys, 4); //copy mem address of argv
+  pointer-=4; 
+  memcpy(pointer, &counter, 4); //argc 
+  phys = pointer-4; //fake return address  
+
+
+  strlcpy(fn_copy, file_name, length); 
+  name = strtok_r(fn_copy, " ", &save_ptr3); //get file name by itself
+  /*end added*/
 
   /* Create a new thread to execute FILE_NAME. */
-  tid = thread_create (file_name, PRI_DEFAULT, start_process, fn_copy);
+  tid = thread_create (name, PRI_DEFAULT, start_process, fn_copy);
   if (tid == TID_ERROR)
     palloc_free_page (fn_copy); 
   return tid;
@@ -89,6 +149,9 @@ start_process (void *file_name_)
 int
 process_wait (tid_t child_tid UNUSED) 
 {
+  while(1) /*added infinite loop*/{
+
+  }
   return -1;
 }
 
@@ -438,7 +501,7 @@ setup_stack (void **esp)
     {
       success = install_page (((uint8_t *) PHYS_BASE) - PGSIZE, kpage, true);
       if (success)
-        *esp = PHYS_BASE;
+        *esp = phys; /*added. used to be PHYS_BASE*/
       else
         palloc_free_page (kpage);
     }
