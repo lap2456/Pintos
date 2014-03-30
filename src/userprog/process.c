@@ -25,6 +25,13 @@ static bool load (const char *cmdline, void (**eip) (void), void **esp);
    FILENAME.  The new thread may be scheduled (and may even exit)
    before process_execute() returns.  Returns the new process's
    thread id, or TID_ERROR if the thread cannot be created. */
+/*TO DO
+1) Figure out how many arguments are in the string file_name
+2) Create an array to hold these arguments
+3) Use strtok_r() to parse the string and place these tokens (arguments) into the array 
+4) Setup the stack for these arguments PUSH backwards (z, then y, and finally x)
+*/
+
 tid_t
 process_execute (const char *file_name) 
 {
@@ -38,8 +45,41 @@ process_execute (const char *file_name)
     return TID_ERROR;
   strlcpy (fn_copy, file_name, PGSIZE);
 
+  /*finds the number of arguments (including the name of the program) as well as the 
+  length of the longest argument*/
+  char *token, *save_ptr;
+  int counter = 0;
+  int max_length = 0;
+  int curr_length;
+  for(token = strtok_r(&fn_copy, " ", &save_ptr); token != NULL; 
+    token = strtok_r(NULL, " ", &save_ptr)){
+    counter++;
+    curr_length = strnlen(token);
+    if(curr_length > max_length){
+      max_length = curr_length;
+    }
+  }
+
+  /*now it parses through again and puts the arguments in the argv array*/
+  char **argv[counter+1][max_length+1];
+  counter = 0;
+  strlcpy(fn_copy, file_name, PGSIZE);
+  char *save_ptr2;
+  for(token = strtok_r(&fn_copy, " ", &save_ptr2); token != NULL;
+    token = strtok_r(NULL, " ", &save_ptr2)){
+    strlcpy(argv[counter][0], token, PGSIZE);
+    counter++;
+  }
+  argv[counter][0] = NULL;
+
+  /*setting up the stack*/
+  int pointer = PHYS_BASE;
+  for(int i=counter-1; i<=0; i--){
+    
+  }
+
   /* Create a new thread to execute FILE_NAME. */
-  tid = thread_create (file_name, PRI_DEFAULT, start_process, fn_copy);
+  tid = thread_create (file_name, PRI_DEFAULT, start_process, argv);
   if (tid == TID_ERROR)
     palloc_free_page (fn_copy); 
   return tid;
@@ -88,7 +128,8 @@ start_process (void *file_name_)
 int
 process_wait (tid_t child_tid UNUSED) 
 {
-  return -1;
+  while(1){}
+    return 0;
 }
 
 /* Free the current process's resources. */
@@ -437,7 +478,7 @@ setup_stack (void **esp)
     {
       success = install_page (((uint8_t *) PHYS_BASE) - PGSIZE, kpage, true);
       if (success)
-        *esp = PHYS_BASE;
+        *esp = PHYS_BASE - 12;
       else
         palloc_free_page (kpage);
     }
