@@ -34,11 +34,9 @@ process_execute (const char *file_name)
   tid_t tid;
 
 
-  int diff; 
-  void * pointer;
-  char *save_ptr2, *name;
-  char *token, *save_ptr, *save_ptr3; 
-  int counter; 
+  int diff, counter; 
+  void *pointer, *token;
+  char *save_ptr2, *name, *save_ptr, *save_ptr3;
 
   /* Make a copy of FILE_NAME.
      Otherwise there's a race between the caller and load(). */
@@ -60,7 +58,7 @@ process_execute (const char *file_name)
     length = strlen(token);
     length +=1; 
     pointer -=length; 
-    memcpy(pointer, token, length); //adding argument strings
+    memcpy(&pointer, token, length); //adding argument strings
   }
 
 
@@ -80,7 +78,7 @@ process_execute (const char *file_name)
     length = strlen(token);
     length+=1; //to account for null termination
     phys = phys-length;  
-    memcpy(pointer, phys, 4); //copy address of PHYS_BASE to pointer location
+    memcpy(&pointer, phys, 4); //copy address of PHYS_BASE to pointer location
     pointer += 4;
   }  
   pointer -= 4*counter;  
