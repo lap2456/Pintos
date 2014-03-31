@@ -48,7 +48,7 @@ process_execute (const char *file_name)
 
 
   /*added*/
-  /*now it parses through again and pushes arugments to stack*/
+  /*now it parses through again and pushes arguments to stack*/
   counter = 0; 
   phys = PHYS_BASE; 
   pointer = phys-1;  
@@ -64,30 +64,35 @@ process_execute (const char *file_name)
 
   /*added*/
   diff = phys - pointer; //how many bytes we have allocated for args
+  //ASSERT(diff<0);
   diff = diff%4; //word alignment
   pointer -= (4-diff); //word alignment
   pointer -= 4; //null pointer 
-  int * zero = NULL;
-  memcpy(pointer, zero, 4); //4 null bytes?
-
+  //ASSERT(pointer!=NULL);
+  int zero = NULL;
+  
+  memcpy(&pointer, &zero, 4); //4 null bytes?
+  //ASSERT(pointer!=NULL);
   strlcpy(fn_copy, file_name, length); 
   pointer -= 4*counter;
   /*now need to push addresses on*/
   for(token = strtok_r(fn_copy, " ", &save_ptr); token != NULL;
     token = strtok_r(NULL, " ", &save_ptr)){
+    //ASSERT(1==0);
     length = strlen(token);
     length+=1; //to account for null termination
     phys = phys-length;  
-    memcpy(&pointer, phys, 4); //copy address of PHYS_BASE to pointer location
+    memcpy(&pointer, &phys, 4); //copy address of PHYS_BASE to pointer location
+    ASSERT(pointer!=NULL);
     pointer += 4;
   }  
   pointer -= 4*counter;  
 
   phys = pointer;
   pointer -=4; 
-  memcpy(pointer, phys, 4); //copy mem address of argv
+  memcpy(&pointer, phys, 4); //copy mem address of argv
   pointer-=4; 
-  memcpy(pointer, &counter, 4); //argc 
+  memcpy(&pointer, &counter, 4); //argc 
   phys = pointer-4; //fake return address  
 
 
