@@ -38,7 +38,7 @@ process_execute (const char *file_name)
   void * pointer;
   char *save_ptr2, *name;
   char *token, *save_ptr, *save_ptr3; 
-  int counter = 0; 
+  int counter; 
 
   /* Make a copy of FILE_NAME.
      Otherwise there's a race between the caller and load(). */
@@ -46,14 +46,12 @@ process_execute (const char *file_name)
   if (fn_copy == NULL)
     return TID_ERROR;
 
-  int length = strlen(file_name);
-  strlcpy (fn_copy, file_name, length+1);
+  int length = strlcpy (fn_copy, file_name, PGSIZE);
 
 
   /*added*/
   /*now it parses through again and pushes arugments to stack*/
   counter = 0; 
-  length = strlen(file_name);
   phys = PHYS_BASE; 
   pointer = phys-1;  
   for(token = strtok_r(fn_copy, " ", &save_ptr2); token != NULL;
