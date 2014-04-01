@@ -19,7 +19,7 @@
 #include "threads/vaddr.h"
 
 static thread_func start_process NO_RETURN;
-static bool load (const char *cmdline, void (**eip) (void), void **esp);
+static bool load (const char *cmd_line, void (**eip) (void), void **esp);
 
 void * phys; 
 /* Starts a new thread running a user program loaded from
@@ -34,74 +34,16 @@ process_execute (const char *file_name)
   tid_t tid;
 
 
-  int diff, counter; 
-  void *pointer, *token;
-  char *save_ptr2, *name, *save_ptr, *save_ptr3;
-
   /* Make a copy of FILE_NAME.
      Otherwise there's a race between the caller and load(). */
   fn_copy = palloc_get_page (0);
   if (fn_copy == NULL)
     return TID_ERROR;
 
-  int length = strlcpy (fn_copy, file_name, PGSIZE);
-
-
-  /*added*/
-  /*now it parses through again and pushes arguments to stack*/
-  counter = 0; 
-  phys = PHYS_BASE; 
-  pointer = phys-1;  
-  for(token = strtok_r(fn_copy, " ", &save_ptr2); token != NULL;
-    token = strtok_r(NULL, " ", &save_ptr2)){
-    counter+=1; 
-    length = strlen(token);
-    length +=1; 
-    pointer -=length; 
-    memcpy(&pointer, token, length); //adding argument strings
-  }
-
-
-  /*added*/
-  diff = phys - pointer; //how many bytes we have allocated for args
-  //ASSERT(diff<0);
-  diff = diff%4; //word alignment
-  pointer -= (4-diff); //word alignment
-  pointer -= 4; //null pointer 
-  //ASSERT(pointer!=NULL);
-  int zero = NULL;
   
-  memcpy(&pointer, &zero, 4); //4 null bytes?
-  //ASSERT(pointer!=NULL);
-  strlcpy(fn_copy, file_name, length); 
-  pointer -= 4*counter;
-  /*now need to push addresses on*/
-  for(token = strtok_r(fn_copy, " ", &save_ptr); token != NULL;
-    token = strtok_r(NULL, " ", &save_ptr)){
-    //ASSERT(1==0);
-    length = strlen(token);
-    length+=1; //to account for null termination
-    phys = phys-length;  
-    memcpy(&pointer, &phys, 4); //copy address of PHYS_BASE to pointer location
-    ASSERT(pointer!=NULL);
-    pointer += 4;
-  }  
-  pointer -= 4*counter;  
-
-  phys = pointer;
-  pointer -=4; 
-  memcpy(&pointer, phys, 4); //copy mem address of argv
-  pointer-=4; 
-  memcpy(&pointer, &counter, 4); //argc 
-  phys = pointer-4; //fake return address  
-
-
-  strlcpy(fn_copy, file_name, length); 
-  name = strtok_r(fn_copy, " ", &save_ptr3); //get file name by itself
-  /*end added*/
 
   /* Create a new thread to execute FILE_NAME. */
-  tid = thread_create (name, PRI_DEFAULT, start_process, fn_copy);
+  tid = thread_create (file_name, PRI_DEFAULT, start_process, fn_copy);
   if (tid == TID_ERROR)
     palloc_free_page (fn_copy); 
   return tid;
@@ -260,7 +202,7 @@ struct Elf32_Phdr
 #define PF_W 2          /* Writable. */
 #define PF_R 4          /* Readable. */
 
-static bool setup_stack (void **esp);
+static bool setup_stack (void **esp, const char * cmd_line);
 static bool validate_segment (const struct Elf32_Phdr *, struct file *);
 static bool load_segment (struct file *file, off_t ofs, uint8_t *upage,
                           uint32_t read_bytes, uint32_t zero_bytes,
@@ -279,6 +221,10 @@ load (const char *file_name, void (**eip) (void), void **esp)
   off_t file_ofs;
   bool success = false;
   int i;
+  char * fname; //added
+  char * copy; //added
+  strlcpy(copy, file_name, PGSIZE); //added
+
 
   /* Allocate and activate page directory. */
   t->pagedir = pagedir_create ();
@@ -286,14 +232,23 @@ load (const char *file_name, void (**eip) (void), void **esp)
     goto done;
   process_activate ();
 
+  /*added*/
+  /*Get file name (without args) from cmd line*/
+  fname = strtok_r(copy, " ", PGSIZE); 
+  
+
+  //ASSERT(1==0); GETS TO THIS POINT
   /* Open executable file. */
-  file = filesys_open (file_name);
+  file = filesys_open (fname);
+  //ASSERT(1==0); //GETS TO THIS POINT
+  ASSERT(file!=NULL);
   if (file == NULL) 
     {
       printf ("load: %s: open failed\n", file_name);
       goto done; 
     }
 
+  ASSERT(1==0);
   /* Read and verify executable header. */
   if (file_read (file, &ehdr, sizeof ehdr) != sizeof ehdr
       || memcmp (ehdr.e_ident, "\177ELF\1\1\1", 7)
@@ -307,6 +262,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
       goto done; 
     }
 
+  //ASSERT(1==0);
   /* Read program headers. */
   file_ofs = ehdr.e_phoff;
   for (i = 0; i < ehdr.e_phnum; i++) 
@@ -366,8 +322,9 @@ load (const char *file_name, void (**eip) (void), void **esp)
         }
     }
 
+  ASSERT(1==0);
   /* Set up stack. */
-  if (!setup_stack (esp))
+  if (!setup_stack (esp, file_name))
     goto done;
 
   /* Start address. */
@@ -489,24 +446,97 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
   return true;
 }
 
+/*added*/
+/*Pushes SIZE bytes in buf onto the stack in KPAGE*/
+static void * push(uint8_t *kpage, size_t *offs, const void *buf, size_t size){
+  size_t padding = ROUND_UP(size, sizeof(uint32_t)); 
+  if(*offs < padding) return NULL; 
+
+  *offs -= padding; 
+  memcpy(kpage + *offs + (padding - size), buf, size); 
+  return kpage + *offs + (padding - size); 
+}
+
+/*added*/
+/*Reverses order of argc elements in argv*/
+static void reverse (int argc, char **argv){
+  int i; 
+  char * temp; 
+  for (i = 0; i< argc/2; i++){
+    temp = argv[i]; 
+    argv[i] = argv[argc-i-1]; 
+    argv[argc-i-1] = temp; 
+  }
+  return; 
+}
+
+/*added*/
+static bool arg_init(uint8_t * kpage, uint8_t * upage, void **esp, const char * cmd_line){
+  size_t offs = PGSIZE; 
+  char *const null = NULL; 
+  char *karg, *save_ptr; 
+  char *copy_line; 
+  int argc; //number of arguments
+  char **argv; 
+
+  /*First, push the arguments onto the stack*/
+  copy_line = push(kpage, &offs, cmd_line, strlen(cmd_line)+1);
+  if(copy_line==NULL) return false; 
+
+  /*Push null onto stack*/
+  if(push(kpage, &offs, &null, sizeof null)==NULL) return false; 
+
+
+  /*Parse command line into arguments and 
+  push pointer to each argument*/
+  argc = 0; 
+  for(karg = strtok_r(copy_line, " ", &save_ptr); 
+    karg!=NULL; karg = strtok_r(NULL, " ", &save_ptr)){
+    //parse arguments and push 
+    void * uarg = upage + (karg - (char *) kpage); //WUT
+    if(push(kpage, &offs, &uarg, sizeof uarg)) return false; 
+    argc++; 
+  }
+
+  /*Reverse the order of the argument pointers*/
+  argv = (char **) (upage + offs); 
+  reverse(argc, (char**)(kpage+offs)); //reverse arguments on stack 
+
+  /*push argv, argc, and fake return address*/
+  bool v = push(kpage, &offs, &argv, sizeof argv); 
+  bool c = push(kpage, &offs, &argc, sizeof argc);
+  bool returnaddr = push(kpage, &offs, &null, sizeof null);
+
+  /*set up initial stack pointer*/
+  *esp = upage + offs; 
+  //hex_dump (uintptr_t ofs, const void *buf_, size_t size, bool ascii);
+  return (v&&c&&returnaddr); 
+}
+
+
+
 /* Create a minimal stack by mapping a zeroed page at the top of
    user virtual memory. */
 static bool
-setup_stack (void **esp) 
+setup_stack (void **esp, const char *cmd_line) 
 {
   uint8_t *kpage;
   bool success = false;
+  bool success_cmd_line; 
 
   kpage = palloc_get_page (PAL_USER | PAL_ZERO);
+  uint8_t * upage =((uint8_t *) PHYS_BASE) - PGSIZE; 
   if (kpage != NULL) 
     {
-      success = install_page (((uint8_t *) PHYS_BASE) - PGSIZE, kpage, true);
-      if (success)
-        *esp = phys; /*added. used to be PHYS_BASE*/
-      else
+      success = install_page (upage, kpage, true);
+      if (success){
+        //*esp = PHYS_BASE;
+        //ASSERT(1==0);
+        success_cmd_line = arg_init(kpage, upage, esp, cmd_line);
+      }else
         palloc_free_page (kpage);
     }
-  return success;
+  return success_cmd_line;
 }
 
 /* Adds a mapping from user virtual address UPAGE to kernel
