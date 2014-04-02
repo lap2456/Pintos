@@ -39,8 +39,7 @@ process_execute (const char *file_name)
   fn_copy = palloc_get_page (0);
   if (fn_copy == NULL)
     return TID_ERROR;
-
-  
+  strlcpy (fn_copy, file_name, PGSIZE);
 
   /* Create a new thread to execute FILE_NAME. */
   tid = thread_create (file_name, PRI_DEFAULT, start_process, fn_copy);
@@ -138,7 +137,7 @@ process_activate (void)
      interrupts. */
   tss_update ();
 }
-
+
 /* We load ELF binaries.  The following definitions are taken
    from the ELF specification, [ELF1], more-or-less verbatim.  */
 
@@ -223,24 +222,25 @@ load (const char *file_name, void (**eip) (void), void **esp)
   int i;
   char * fname; //added
   char * copy; //added
+  char * saveptr;
+  
   strlcpy(copy, file_name, PGSIZE); //added
 
 
   /* Allocate and activate page directory. */
-  t->pagedir = pagedir_create ();
+  t->pagedir = pagedir_create ();  //breaks here !!!
   if (t->pagedir == NULL) 
     goto done;
   process_activate ();
-
   /*added*/
   /*Get file name (without args) from cmd line*/
-  fname = strtok_r(copy, " ", PGSIZE); 
+  fname = strtok_r(copy, " ", &saveptr); 
   
 
-  //ASSERT(1==0); GETS TO THIS POINT
+  ASSERT(1==0); 
   /* Open executable file. */
-  file = filesys_open (fname);
-  //ASSERT(1==0); //GETS TO THIS POINT
+  file = filesys_open(fname);
+  ASSERT(2==0); 
   ASSERT(file!=NULL);
   if (file == NULL) 
     {
@@ -248,7 +248,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
       goto done; 
     }
 
-  ASSERT(1==0);
+  ASSERT(3==0);
   /* Read and verify executable header. */
   if (file_read (file, &ehdr, sizeof ehdr) != sizeof ehdr
       || memcmp (ehdr.e_ident, "\177ELF\1\1\1", 7)
@@ -262,7 +262,6 @@ load (const char *file_name, void (**eip) (void), void **esp)
       goto done; 
     }
 
-  //ASSERT(1==0);
   /* Read program headers. */
   file_ofs = ehdr.e_phoff;
   for (i = 0; i < ehdr.e_phnum; i++) 
@@ -337,7 +336,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
   file_close (file);
   return success;
 }
-
+
 /* load() helpers. */
 
 static bool install_page (void *upage, void *kpage, bool writable);
@@ -508,7 +507,7 @@ static bool arg_init(uint8_t * kpage, uint8_t * upage, void **esp, const char * 
   bool returnaddr = push(kpage, &offs, &null, sizeof null);
 
   /*set up initial stack pointer*/
-  *esp = upage + offs; 
+  *esp = upage + offs; //kpage or upage??
   //hex_dump (uintptr_t ofs, const void *buf_, size_t size, bool ascii);
   return (v&&c&&returnaddr); 
 }
