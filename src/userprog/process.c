@@ -201,6 +201,8 @@ struct Elf32_Phdr
 #define PF_W 2          /* Writable. */
 #define PF_R 4          /* Readable. */
 
+static void * push(uint8_t *kpage, size_t *offs, const void *buf, size_t size);
+static bool arg_init(uint8_t * kpage, uint8_t * upage, void **esp, const char * cmd_line);
 static bool setup_stack (void **esp, const char * cmd_line);
 static bool validate_segment (const struct Elf32_Phdr *, struct file *);
 static bool load_segment (struct file *file, off_t ofs, uint8_t *upage,
@@ -215,32 +217,30 @@ bool
 load (const char *file_name, void (**eip) (void), void **esp) 
 {
   struct thread *t = thread_current ();
+  char fname[NAME_MAX + 1]; //added 
   struct Elf32_Ehdr ehdr;
   struct file *file = NULL;
   off_t file_ofs;
   bool success = false;
   int i;
-  char * fname; //added
-  char * copy; //added
   char * saveptr;
   
-  strlcpy(copy, file_name, PGSIZE); //added
+  
 
 
   /* Allocate and activate page directory. */
   t->pagedir = pagedir_create ();  //breaks here !!!
   if (t->pagedir == NULL) 
     goto done;
+  
   process_activate ();
   /*added*/
   /*Get file name (without args) from cmd line*/
-  fname = strtok_r(copy, " ", &saveptr); 
+  strlcpy(fname, file_name, sizeof fname); //added
+  strtok_r(fname, " ", &saveptr); 
   
-
-  ASSERT(1==0); 
   /* Open executable file. */
-  file = filesys_open(fname);
-  ASSERT(2==0); 
+  file = filesys_open(fname); 
   ASSERT(file!=NULL);
   if (file == NULL) 
     {
@@ -248,7 +248,6 @@ load (const char *file_name, void (**eip) (void), void **esp)
       goto done; 
     }
 
-  ASSERT(3==0);
   /* Read and verify executable header. */
   if (file_read (file, &ehdr, sizeof ehdr) != sizeof ehdr
       || memcmp (ehdr.e_ident, "\177ELF\1\1\1", 7)
@@ -321,11 +320,10 @@ load (const char *file_name, void (**eip) (void), void **esp)
         }
     }
 
-  ASSERT(1==0);
   /* Set up stack. */
-  if (!setup_stack (esp, file_name))
-    goto done;
-
+  if (!setup_stack (esp, file_name)){
+     goto done;
+  }
   /* Start address. */
   *eip = (void (*) (void)) ehdr.e_entry;
 
@@ -485,7 +483,6 @@ static bool arg_init(uint8_t * kpage, uint8_t * upage, void **esp, const char * 
   /*Push null onto stack*/
   if(push(kpage, &offs, &null, sizeof null)==NULL) return false; 
 
-
   /*Parse command line into arguments and 
   push pointer to each argument*/
   argc = 0; 
@@ -493,10 +490,13 @@ static bool arg_init(uint8_t * kpage, uint8_t * upage, void **esp, const char * 
     karg!=NULL; karg = strtok_r(NULL, " ", &save_ptr)){
     //parse arguments and push 
     void * uarg = upage + (karg - (char *) kpage); //WUT
-    if(push(kpage, &offs, &uarg, sizeof uarg)) return false; 
+    
+    if(push(kpage, &offs, &uarg, sizeof uarg) == NULL) {
+	return false; 
+    }
     argc++; 
   }
-
+  //ASSERT(1==0);
   /*Reverse the order of the argument pointers*/
   argv = (char **) (upage + offs); 
   reverse(argc, (char**)(kpage+offs)); //reverse arguments on stack 
@@ -508,7 +508,8 @@ static bool arg_init(uint8_t * kpage, uint8_t * upage, void **esp, const char * 
 
   /*set up initial stack pointer*/
   *esp = upage + offs; //kpage or upage??
-  //hex_dump (uintptr_t ofs, const void *buf_, size_t size, bool ascii);
+  //ASSERT(2==0);
+  //hex_dump (0, esp, 100, true);
   return (v&&c&&returnaddr); 
 }
 
@@ -521,7 +522,7 @@ setup_stack (void **esp, const char *cmd_line)
 {
   uint8_t *kpage;
   bool success = false;
-  bool success_cmd_line; 
+  bool success_cmd_line = false; 
 
   kpage = palloc_get_page (PAL_USER | PAL_ZERO);
   uint8_t * upage =((uint8_t *) PHYS_BASE) - PGSIZE; 
@@ -530,7 +531,7 @@ setup_stack (void **esp, const char *cmd_line)
       success = install_page (upage, kpage, true);
       if (success){
         //*esp = PHYS_BASE;
-        //ASSERT(1==0);
+	
         success_cmd_line = arg_init(kpage, upage, esp, cmd_line);
       }else
         palloc_free_page (kpage);
