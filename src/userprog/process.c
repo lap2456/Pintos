@@ -89,12 +89,18 @@ start_process (void *file_name_)
    This function will be implemented in problem 2-2.  For now, it
    does nothing. */
 int
-process_wait (tid_t child_tid UNUSED) 
+process_wait (tid_t child_tid) 
 {
-  while(1) /*added infinite loop*/{
+  	int result;
+  	struct thread *child = lookup_thread (child_tid);
 
-  }
-  return -1;
+  	if(child == NULL || child->parent != thread_current ())
+		//either could not find the tid or it is not the correct child
+		return -1;
+  	sema_down (&child->wait_sema);
+	result = child->exit_status;
+	remove_thread (child);
+	return result;
 }
 
 /* Free the current process's resources. */

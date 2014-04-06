@@ -13,6 +13,7 @@
 #include <debug.h>
 #include <list.h>
 #include <stdint.h>
+#include "threads/synch.h"
 
 
 
@@ -129,6 +130,9 @@ struct thread
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
     uint32_t *pagedir;                  /* Page directory. */
+    int exit_status;
+    struct semaphore wait_sema;
+    struct thread *parent;
 #endif
 
     /* Owned by thread.c. */

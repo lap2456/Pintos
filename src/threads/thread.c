@@ -30,6 +30,11 @@
    when they are first scheduled and removed when they exit. */
 static struct list all_list;
 
+#ifdef USERPROG
+//list of all the dying processes
+static struct list dying_list;
+#endif
+
 /* Idle thread. */
 static struct thread *idle_thread;
 
@@ -244,8 +249,13 @@ thread_create (const char *name, int priority,
   sf->eip = switch_entry;
   sf->ebp = 0;
 
+  #ifdef USERPROG
+  sema_init (&t->wait_sema, 0);
+  #endif
+
   /* Add to run queue. */
   thread_unblock(t);
+  
 
   intr_set_level (old_level);
 
@@ -355,6 +365,16 @@ thread_exit (void)
   schedule ();
   NOT_REACHED ();
 }
+
+void
+remove_thread (struct thread *t){
+	enum intr_level old_level;    
+  	old_level = intr_disable ();
+  	list_remove (&t->allelem);
+  	palloc_free_page (t);
+  	intr_set_level (old_level);  
+}
+
 
 /* Yields the CPU.  The current thread is not put to sleep and
    may be scheduled again immediately at the scheduler's whim. */
@@ -569,6 +589,41 @@ alloc_frame (struct thread *t, size_t size)
   t->stack -= size;
   return t->stack;
 }
+
+#ifdef USERPROG
+struct thread *
+lookup_thread (tid_t tid){
+	struct thread *result = NULL;
+	enum intr_level old_level;
+	old_level = intr_disable();
+	struct list_elem *e;
+	//first search the active list of threads for this tid
+	for (e = list_begin (&all_list); e != list_end (&all_list); e = list_next (e))
+  	{
+		struct thread *t = list_entry (e, struct thread, allelem);
+		if(t->tid == tid)
+		{
+			result = t;
+			break;
+		}
+	}
+	if (result == NULL){
+	//if you still haven't found it then search the dying list
+		for (e = list_begin (&dying_list); e != list_end (&dying_list); e = list_next (e))
+  		{
+    			struct thread *t = list_entry (e, struct thread, allelem);
+    			if (t->tid == tid)
+    			{
+      				result = t;
+      				break;
+    			}
+  		}
+	}
+	
+	intr_set_level (old_level);
+	return result;
+}  
+#endif
 
 /* Chooses and returns the next thread to be scheduled.  Should
    return a thread from the run queue, unless the run queue is

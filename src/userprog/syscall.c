@@ -8,11 +8,15 @@
 #include "threads/vaddr.h"
 #include "filesys/file.h"
 #include "filesys/filesys.h"
+#include "filesys/directory.h"
 #include "userprog/process.h"
-#
+#include "userprog/fd.c"
+#include "userprog/exception.h"
+#include "userprog/pagedir.h"
+#include "devices/input.h"
 
 static void syscall_handler (struct intr_frame *);
-
+static void copy_in (void *, const void *, size_t);
 static struct lock file_sys_lock;//added
 
 void
@@ -26,81 +30,96 @@ static void
 syscall_handler (struct intr_frame *f) 
 {
   //added
-  if(!verify_pointer(f->esp)){ //add arg
+  if(!verify_pointer(&f->esp)){ //add arg
   	//free resources
   	//terminate thread
   	thread_exit();
   } 
 
   //dereference esp to get syscall number
-  int sys = *esp; 
+  int *sys = (int*)(f->esp); 
 
   int args[3]; 
   copy_in(args, (uint32_t *)f->esp+1, (sizeof *args)*3); 
-  switch(sys){ //add all args in 
+  int result;
+  switch(*sys){ //add all args in 
     case 0:
-      halt();
+      result = halt();
       break; 
     case 1:
-      exit(args[0]);
+      result = exit(args[0]);
       break;  
     case 2: 
-      exec(args[0]); 
+      result = exec((const char *)args[0]); 
       break; 
     case 3: 
-      wait(args[0]); 
+      result = wait((tid_t)args[0]); 
       break; 
     case 4: 
-      create(args[0], args[1]); 
+      result = create((const char*)args[0], (unsigned)args[1]); 
       break; 
     case 5:
-      remove(args[0]);
+      result = remove((const char*)args[0]);
       break;
     case 6: 
-      open(args[0]);
+      result = open((const char*)args[0]);
       break; 
     case 7:  
-      filesize(args[0]); 
+      result = filesize(args[0]); 
       break; 
     case 8: 
-      read(args[0],args[1],args[2]);
+      result = read(args[0], (char *)args[1], (unsigned)args[2]);
       break; 
     case 9: 
-      write(args[0],args[1],args[2]); 
+      result = write(args[0], (const void*)args[1], (unsigned)args[2]); 
       break; 
     case 10: 
-      seek(args[0],args[1]); 
+      result = seek(args[0], (unsigned)args[1]); 
       break; 
     case 11: 
-      tell(args[0]); 
+      result = tell(args[0]); 
       break; 
     case 12:
-      close(args[0]); 
+      result = close(args[0]); 
       break; 
     default: 
-      printf("Error in system call number %d. Exiting.", sys); 
-      thread_exit(); 
+      printf("Error in system call number %d. Exiting.", *sys); 
+      halt(); 
   }
-  printf ("system call!\n");
-  
-  thread_exit ();
+  f->eax = result;
 }
 
 //added
 /*verifies if user address requested is in user space and is not mapped to NULL*/
-static bool
-verify_pointer( const void* addr){
-
-	return( addr < PHYS_BASE && pagedir_get_page(thread_current()->pagedir, addr) !=NULL);
+int verify_pointer(const void* addr){
+	return((addr != NULL) && (addr < PHYS_BASE) && (is_user_vaddr(addr)));
 }
 
+static inline bool
+get_user (uint8_t *dst, const uint8_t *usrc)
+{
+  int eax;
+  asm ("movl $1f, %%eax; movb %2, %%al; movb %%al, %0; 1:"
+       : "=m" (*dst), "=&a" (eax) : "m" (*usrc));
+  return eax != 0;
+}
 
+static void
+copy_in (void *dst_, const void *usrc_, size_t size) 
+{
+  uint8_t *dst = dst_;
+  const uint8_t *usrc = usrc_;
+ 
+  for (; size > 0; size--, dst++, usrc++) 
+    if (usrc >= (uint8_t *) PHYS_BASE || !get_user (dst, usrc)) 
+      thread_exit ();
+}
 
 
 /*Terminates Pintos by calling shutdown_power_off() (declared in
 devices/shutdown.h This should be seldom used, because you lose some information
 about possilbe deadlock situations, etc.) */
-void halt (void){
+int halt (void){
   shutdown_power_off(); 
 } 
 
@@ -108,9 +127,10 @@ void halt (void){
 If the process's parent waits (see below), this is the status that
 will be returned. Conventionally, a status of 0 indicates
 success and nonzero values indicate errors.*/
-void exit (int status){
-NO_RETURN;
-
+static int exit (int status){
+  thread_current()->exit_status = status;
+  printf("%s: exit(%d)\n", thread_current()->name, status);
+  thread_exit();
 } 
 
 /*Runs the executable whose name is given in cmd_line, 
@@ -121,7 +141,13 @@ the parent process cannot return from the exec until it knows whether the child
 process successfully loaded its executable. You must use appropriate synchronization
 to ensure this.
 */
-pid_t exec (const char *cmd_line);
+
+static int exec (const char *cmd_line){
+	lock_acquire (&file_sys_lock);
+	int result = process_execute (cmd_line);
+	lock_release (&file_sys_lock);
+	return result;
+}
 
 /*Waits for a child process pid and retrieves the child’s exit status.
 If pid is still alive, waits until it terminates. Then, returns the status that pid passed
@@ -154,18 +180,34 @@ implement process_wait() according to the comment at the top of the function
 and then implement the wait system call in terms of process_wait().
 Implementing this system call requires considerably more work than any of the rest.
 */
-int wait (pid_t);
-
+static int wait (tid_t tid){
+	int value = process_wait(tid);
+	return value;
+}
 
 /*Creates a new file called file initially initial size bytes in size. Returns true if suc-
 cessful, false otherwise. Creating a new file does not open it: opening the new file is
 a separate operation which would require a open system call */
-bool create (const char *file, unsigned initial_size);
+static int create (const char *file, unsigned initial_size){
+	if (!verify_pointer (file))
+		exit(-1);
+	lock_acquire (&file_sys_lock);
+	int result = filesys_create (file, initial_size);
+	lock_release (&file_sys_lock);
+	return result;
+}
 
 /*Deletes the file called file. Returns true if successful, false otherwise. A file may be
 removed regardless of whether it is open or closed, and removing an open file does
 not close it. See [Removing an Open File], page 34, for details.*/
-bool remove (const char *file);
+static int remove (const char *file){
+	if(!verify_pointer(file))
+		exit(-1);
+	lock_acquire (&file_sys_lock);
+	int result = filesys_remove (file);
+	lock_release (&file_sys_lock);
+	return result;
+}
 
 /*Opens the file called file. Returns a nonnegative integer handle called a “file descrip-
 tor” (fd) or -1 if the file could not be opened.
@@ -179,15 +221,53 @@ When a single file is opened more than once, whether by a single process or diff
 processes, each open returns a new file descriptor. Different file descriptors for a single
 file are closed independently in separate calls to close and they do not share a file
 position.*/
-int open (const char *file);
+static int open (const char *file){
+	if(!verify_pointer(file))
+		exit(-1);
+	lock_acquire (&file_sys_lock);
+	struct file *file_opened = filesys_open (file);
+	if(file_opened == NULL){
+		lock_release (&file_sys_lock);
+		return -1;
+	}
+	int result = fd_acquire (file_opened);
+	lock_release (&file_sys_lock);
+	return result;
+}
 
 /*Returns the size in bytes of the file open as fd*/
-int filesize (int fd);
+static int filesize (int fd){
+	if(!fd_is_valid(fd))
+		exit(-1);
+	lock_acquire(&file_sys_lock);
+	int result = file_length (fd_get (fd));
+	lock_release (&file_sys_lock);
+	return result;
+}
 
 /*Reads size bytes from the file open as fd into buffer. Returns the number of bytes
 actually read (0 at end of file), or -1 if the file could not be read (due to a condition
 other than end of file). fd 0 reads from the keyboard using input_getc().*/
-int read (int fd, void *buffer, unsigned length);
+static int read (int fd, char *buffer, unsigned length){
+	if(!verify_pointer(buffer) || !is_user_vaddr (buffer + length))
+		exit(-1);
+	lock_acquire (&file_sys_lock);
+	if(fd == STDIN_FILENO){
+		int i;
+		for(i = 0; i<length; i++)
+			buffer[i] = input_getc();
+		lock_release (&file_sys_lock);
+		return length;
+	}
+	if (!fd_is_valid (fd)){
+		lock_release (&file_sys_lock);
+		return -1;
+	}
+	struct file *fp = fd_get (fd);
+	int result = file_read (fp, buffer, length);
+	lock_release (&file_sys_lock);
+	return result;
+}
 
 /*Writes size bytes from buffer to the open file fd. 
 Returns the number of bytes actually  written, which may be 
@@ -203,7 +283,24 @@ in one call to putbuf(), at least as long as size is not bigger than a few hundr
 bytes. (It is reasonable to break up larger buffers.) Otherwise, lines of text output
 by different processes may end up interleaved on the console, confusing both human
 readers and our grading scripts.*/
-int write (int fd, const void *buffer, unsigned length);
+static int write (int fd, const void *buffer, unsigned length){
+	if(!verify_pointer(buffer) || !is_user_vaddr (buffer + length))
+		exit(-1);
+	lock_acquire(&file_sys_lock);
+	if (fd == STDOUT_FILENO)
+	{
+		putbuf(buffer, length);
+		lock_release (&file_sys_lock);
+		return length;
+	}
+	if(!fd_is_valid (fd)){
+		lock_release (&file_sys_lock);
+		return -1;
+	}
+	int result = file_write (fd_get (fd), buffer, length);
+	lock_release (&file_sys_lock);
+	return result;
+}
 
 /*Changes the next byte to be read or written in open file fd to position, expressed in
 bytes from the beginning of the file. (Thus, a position of 0 is the file’s start.)
@@ -212,12 +309,33 @@ indicating end of file. A later write extends the file, filling any unwritten ga
 zeros. (However, in Pintos, files will have a fixed length until project 4 is complete,
 so writes past end of file will return an error.) These semantics are implemented in
 the file system and do not require any special effort in system call implementation.*/
-void seek (int fd, unsigned position);
+static int seek (int fd, unsigned position){
+	if(!fd_is_valid(fd))
+		return -1;
+	lock_acquire (&file_sys_lock);
+	file_seek (fd_get(fd), position);
+	lock_release(&file_sys_lock);
+	return 0;
+}
 
 /*Returns the position of the next byte to be read or written in open file fd, expressed
 in bytes from the beginning of the file. */
-unsigned tell (int fd);
+static int tell (int fd){
+	if(!fd_is_valid(fd))
+		return -1;
+	lock_acquire(&file_sys_lock);
+	fd_release(fd);
+	lock_release(&file_sys_lock);
+	return 0;
+}
 
 /*Closes file descriptor fd. Exiting or terminating a process implicitly closes all its open
 file descriptors, as if by calling this function for each one.*/
-void close (int fd);
+static int close (int fd){
+	if(!fd_is_valid (fd))
+		exit(-1);
+	lock_acquire (&file_sys_lock);
+	fd_release (fd);
+	lock_release (&file_sys_lock);
+	return 0;
+}
