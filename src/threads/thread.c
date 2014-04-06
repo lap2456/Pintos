@@ -13,9 +13,7 @@
 #include "threads/vaddr.h"
 #include "devices/timer.h"
 #include "lib/kernel/list.h"
-#ifdef USERPROG
 #include "userprog/process.h"
-#endif
 
 //last edit 3/16
 
@@ -30,10 +28,8 @@
    when they are first scheduled and removed when they exit. */
 static struct list all_list;
 
-#ifdef USERPROG
 //list of all the dying processes
-static struct list dying_list;
-#endif
+static struct list zombie_list;
 
 /* Idle thread. */
 static struct thread *idle_thread;
@@ -110,7 +106,8 @@ thread_init (void)
 
   lock_init (&tid_lock);
   list_init (&ready_list);
-  list_init(&sleep_list); /*added*/
+  list_init (&sleep_list); /*added*/
+  list_init (&zombie_list); //added 
   list_init (&all_list);
 
 
@@ -154,10 +151,8 @@ thread_tick (void)
   /* Update statistics. */
   if (t == idle_thread)
     idle_ticks++;
-#ifdef USERPROG
   else if (t->pagedir != NULL)
     user_ticks++;
-#endif
   else
     kernel_ticks++;
 
@@ -248,10 +243,10 @@ thread_create (const char *name, int priority,
   sf = alloc_frame (t, sizeof *sf);
   sf->eip = switch_entry;
   sf->ebp = 0;
-
-  #ifdef USERPROG
-  sema_init (&t->wait_sema, 0);
-  #endif
+  
+  //added
+  t->parent = thread_current();
+  list_push_back (&thread_current()->children, &t->parent_elem);
 
   /* Add to run queue. */
   thread_unblock(t);
@@ -351,19 +346,54 @@ void
 thread_exit (void) 
 {
   ASSERT (!intr_context ());
-
-#ifdef USERPROG
-  process_exit ();
-#endif
-
+  struct thread *t = thread_current();
   /* Remove thread from all threads list, set our status to dying,
      and schedule another process.  That process will destroy us
      when it calls thread_schedule_tail(). */
   intr_disable ();
   list_remove (&thread_current()->allelem);
-  thread_current ()->status = THREAD_DYING;
+
+ while(!list_empty (&t->children)){
+	struct thread *child = list_entry (list_pop_front (&t -> children), struct thread, parent_elem);
+	ASSERT (is_thread (child));
+	ASSERT (child->parent == t);
+	if(child ->status == THREAD_ZOMBIE)
+		slay_zombie(child);
+	else
+		child->parent = NULL;
+ }
+#ifdef USERPROG
+ if(t->pagedir)
+	process_exit();
+#endif
+ if(t->parent == NULL)
+	t->status = THREAD_DYING;
+ else
+ {
+	//ASSERT (is_interior(&t->parent_elem));
+	list_push_back (&zombie_list, &t->elem);
+	sema_up (&t->wait_sema);
+	t->status = THREAD_ZOMBIE;
+ }
+
   schedule ();
   NOT_REACHED ();
+}
+
+void
+slay_zombie(struct thread *t)
+{
+	ASSERT(intr_get_level() == INTR_OFF);
+	ASSERT(is_thread(t));
+	if(t->parent)
+	{
+		//ASSERT(is_interior(&t->parent_elem));
+		list_remove(&t->parent_elem);
+	}
+	else
+		//ASSERT(!is_interior (&t->parent_elem));
+	list_remove (&t->elem);
+	palloc_free_page(t);
 }
 
 void
@@ -575,6 +605,10 @@ init_thread (struct thread *t, const char *name, int priority)
 
   t->magic = THREAD_MAGIC;
   list_push_back (&all_list, &t->allelem);
+  
+  //added
+  list_init (&t->children);
+  sema_init (&t->wait_sema, 0);
 }
 
 /* Allocates a SIZE-byte frame at the top of thread T's stack and
@@ -590,7 +624,6 @@ alloc_frame (struct thread *t, size_t size)
   return t->stack;
 }
 
-#ifdef USERPROG
 struct thread *
 lookup_thread (tid_t tid){
 	struct thread *result = NULL;
@@ -609,7 +642,7 @@ lookup_thread (tid_t tid){
 	}
 	if (result == NULL){
 	//if you still haven't found it then search the dying list
-		for (e = list_begin (&dying_list); e != list_end (&dying_list); e = list_next (e))
+		for (e = list_begin (&zombie_list); e != list_end (&zombie_list); e = list_next (e))
   		{
     			struct thread *t = list_entry (e, struct thread, allelem);
     			if (t->tid == tid)
@@ -623,7 +656,6 @@ lookup_thread (tid_t tid){
 	intr_set_level (old_level);
 	return result;
 }  
-#endif
 
 /* Chooses and returns the next thread to be scheduled.  Should
    return a thread from the run queue, unless the run queue is
@@ -671,11 +703,10 @@ thread_schedule_tail (struct thread *prev)
   /* Start new time slice. */
   thread_ticks = 0;
 
-#ifdef USERPROG
   /* Activate the new address space. */
+#ifdef USERPROG
   process_activate ();
 #endif
-
   /* If the thread we switched from is dying, destroy its struct
      thread.  This must happen late so that thread_exit() doesn't
      pull out the rug under itself.  (We don't free
@@ -722,9 +753,6 @@ allocate_tid (void)
 
   return tid;
 }
-
-
-
 
 /* Offset of `stack' member within `struct thread'.
    Used by switch.S, which can't figure it out on its own. */

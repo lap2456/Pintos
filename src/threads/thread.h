@@ -33,8 +33,8 @@ enum thread_status
     THREAD_READY,       /* Not running but ready to run. */
     THREAD_BLOCKED,     /* Waiting for an event to trigger. */
     THREAD_DYING,        /* About to be destroyed. */
-
-    THREAD_SLEEPING     /*KG added; thread put to sleep*/
+    THREAD_SLEEPING,     /*KG added; thread put to sleep*/
+    THREAD_ZOMBIE
   };
 
 /* Thread identifier type.
@@ -126,14 +126,19 @@ struct thread
     struct list_elem donationElem;
     struct list_elem sleepElem; 
     struct lock *waitingLock; //the lock the thread is waiting for (or NULL if thread not waiting on a lock)
-	
-#ifdef USERPROG
+
     /* Owned by userprog/process.c. */
     uint32_t *pagedir;                  /* Page directory. */
-    int exit_status;
-    struct semaphore wait_sema;
-    struct thread *parent;
-#endif
+    int exit_status;		//exit status will be held here
+
+    //shared between userprog/process.c and thread.c
+    struct list *file_to_run;
+    struct semaphore wait_sema;	//semaphore for parent in process wait
+    struct thread *parent;	//holds the parent of this process
+    struct list children;
+    struct list_elem parent_elem;
+    struct file *self;
+    struct dir *pwd;
 
     /* Owned by thread.c. */
     unsigned magic;                     /* Detects stack overflow. */

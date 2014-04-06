@@ -5,6 +5,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <list.h>
 #include "userprog/gdt.h"
 #include "userprog/pagedir.h"
 #include "userprog/tss.h"
@@ -32,7 +33,6 @@ process_execute (const char *file_name)
 {
   char *fn_copy;
   tid_t tid;
-
 
   /* Make a copy of FILE_NAME.
      Otherwise there's a race between the caller and load(). */
@@ -62,6 +62,7 @@ start_process (void *file_name_)
   if_.gs = if_.fs = if_.es = if_.ds = if_.ss = SEL_UDSEG;
   if_.cs = SEL_UCSEG;
   if_.eflags = FLAG_IF | FLAG_MBS;
+
   success = load (file_name, &if_.eip, &if_.esp);
 
   /* If load failed, quit. */
@@ -91,15 +92,20 @@ start_process (void *file_name_)
 int
 process_wait (tid_t child_tid) 
 {
+
   	int result;
+	int old_level = intr_disable();
   	struct thread *child = lookup_thread (child_tid);
 
-  	if(child == NULL || child->parent != thread_current ())
+  	if(child == NULL || child->parent != thread_current ()){
 		//either could not find the tid or it is not the correct child
+		intr_set_level (old_level);
 		return -1;
+	}
   	sema_down (&child->wait_sema);
 	result = child->exit_status;
 	remove_thread (child);
+        intr_set_level (old_level);
 	return result;
 }
 
@@ -122,6 +128,7 @@ process_exit (void)
          directory before destroying the process's page
          directory, or our active page directory will be one
          that's been freed (and cleared). */
+      printf("%s: exit(%d)\n", thread_current()->name, thread_current()->exit_status);
       cur->pagedir = NULL;
       pagedir_activate (NULL);
       pagedir_destroy (pd);

@@ -106,8 +106,7 @@ struct list
    of the list element.  See the big comment at the top of the
    file for an example. */
 #define list_entry(LIST_ELEM, STRUCT, MEMBER)           \
-        ((STRUCT *) ((uint8_t *) &(LIST_EL
-EM)->next     \
+        ((STRUCT *) ((uint8_t *) &(LIST_ELEM)->next     \
                      - offsetof (STRUCT, MEMBER.next)))
 
 /* List initialization.
@@ -127,6 +126,7 @@ void list_init (struct list *);
 
 /* List traversal. */
 struct list_elem *list_begin (struct list *);
+
 struct list_elem *list_next (struct list_elem *);
 struct list_elem *list_end (struct list *);
 
@@ -170,6 +170,8 @@ typedef bool list_less_func (const struct list_elem *a,
 /* Operations on lists with ordered elements. */
 void list_sort (struct list *,
                 list_less_func *, void *aux);
+static inline bool
+		is_interior (struct list_elem *elem)
 void list_insert_ordered (struct list *, struct list_elem *,
                           list_less_func *, void *aux);
 void list_unique (struct list *, struct list *duplicates,
