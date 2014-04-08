@@ -22,29 +22,49 @@
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmd_line, void (**eip) (void), void **esp);
 
-void * phys; 
+
+
+struct file_info { 
+  const char * file_name; //name of file to be executed
+  struct semaphore loaded; //keeps track of whether file is successfully loaded
+  struct progress *p; //child process
+  bool success; //true if program successfully loaded 
+}; 
+
+
 /* Starts a new thread running a user program loaded from
    FILENAME.  The new thread may be scheduled (and may even exit)
    before process_execute() returns.  Returns the new process's
    thread id, or TID_ERROR if the thread cannot be created. */
-
 tid_t
 process_execute (const char *file_name) 
 {
   char *fn_copy;
   tid_t tid;
+  char fname[16]; 
+  char * saveptr;
 
-  /* Make a copy of FILE_NAME.
-     Otherwise there's a race between the caller and load(). */
-  fn_copy = palloc_get_page (0);
-  if (fn_copy == NULL)
-    return TID_ERROR;
-  strlcpy (fn_copy, file_name, PGSIZE);
+  /*KG added. Initialize file info*/ 
+  struct file_info file; 
+  file.file_name = file_name; 
+  sema_init(&file.loaded, 0);
+
+
+
+  //added
+  //get name of file without args before passing in to thread create
+  strlcpy(fname, file_name, sizeof fname); //added
+  strtok_r(fname, " ", &saveptr); 
 
   /* Create a new thread to execute FILE_NAME. */
-  tid = thread_create (file_name, PRI_DEFAULT, start_process, fn_copy);
-  if (tid == TID_ERROR)
-    palloc_free_page (fn_copy); 
+  tid = thread_create (fname, PRI_DEFAULT, start_process, &file);
+  if(tid != TID_ERROR){
+    sema_down(&file.loaded); 
+    if(file.success)
+      list_push_back(&thread_current()->children, &file.p->elem); //add progress struct to list of current thread's children 
+    else
+      tid = TID_ERROR; 
+  }
   return tid;
 }
 
@@ -53,20 +73,39 @@ process_execute (const char *file_name)
 static void
 start_process (void *file_name_)
 {
-  char *file_name = file_name_;
+  //char *file_name = file_name_;
   struct intr_frame if_;
   bool success;
 
+  struct file_info *f = file_name_; 
   /* Initialize interrupt frame and load executable. */
   memset (&if_, 0, sizeof if_);
   if_.gs = if_.fs = if_.es = if_.ds = if_.ss = SEL_UDSEG;
   if_.cs = SEL_UCSEG;
   if_.eflags = FLAG_IF | FLAG_MBS;
 
-  success = load (file_name, &if_.eip, &if_.esp);
+  success = load (f->file_name, &if_.eip, &if_.esp);
+
+  //KG added
+  if(success){
+    f->p = thread_current()-> progress = malloc(sizeof *f->p); 
+    success = f->p != NULL; 
+  }
+  if(success){
+    lock_init(&f->p->lock); 
+    f->p->ref = 2; //both alive
+    f->p->tid = thread_current()->tid; 
+    f->p->exit_status = -1; 
+    sema_init(&f->p->dead, 0); 
+  }
+
+  f->success = success; //success = true if loaded
+  sema_up(&f->loaded); //notify parent thread of status of load
+
+
 
   /* If load failed, quit. */
-  palloc_free_page (file_name);
+  //palloc_free_page (file_name);
   if (!success) 
     thread_exit ();
 
@@ -79,7 +118,15 @@ start_process (void *file_name_)
   asm volatile ("movl %0, %%esp; jmp intr_exit" : : "g" (&if_) : "memory");
   NOT_REACHED ();
 }
+static void remove_child(struct progress *p){
+  int count; 
+  lock_acquire(&p->lock); 
+  count = --p -> ref;
+  lock_release(&p->lock); 
 
+  if(count==0)
+    free(p);
+}
 /* Waits for thread TID to die and returns its exit status.  If
    it was terminated by the kernel (i.e. killed due to an
    exception), returns -1.  If TID is invalid or if it was not a
@@ -92,21 +139,22 @@ start_process (void *file_name_)
 int
 process_wait (tid_t child_tid) 
 {
-
-  	int result;
-	int old_level = intr_disable();
-  	struct thread *child = lookup_thread (child_tid);
-
-  	if(child == NULL || child->parent != thread_current ()){
-		//either could not find the tid or it is not the correct child
-		intr_set_level (old_level);
-		return -1;
-	}
-  	sema_down (&child->wait_sema);
-	result = child->exit_status;
-	remove_thread (child);
-        intr_set_level (old_level);
-	return result;
+  struct thread *t = thread_current(); 
+  struct list_elem *e, *next; 
+  int result; //to be returned (exit code)
+  for(e = list_begin(&t->children); e != list_end(&t->children); e = next)
+  {
+    struct progress *child = list_entry(e, struct progress, elem);
+    if(child->tid == child_tid)
+    {
+       sema_down(&child->dead);
+       result = child->exit_status;
+       next = list_remove(e);
+       remove_child(child);
+       return result;
+    }
+  }
+	return -1; 
 }
 
 /* Free the current process's resources. */
@@ -115,6 +163,26 @@ process_exit (void)
 {
   struct thread *cur = thread_current ();
   uint32_t *pd;
+  struct list_elem *e, *next; 
+
+
+  /*KG added. close executable*/
+  file_close(cur->file_to_run);
+
+  /*KG added. Notify parent*/ 
+  if(cur->progress != NULL){
+    struct progress *p = cur->progress; 
+    printf("%s: exit(%d)\n", cur->name,  p->exit_status);
+    sema_up(&p->dead); 
+    remove_child(p); 
+  }
+
+  /*KG added. Free children from list.*/ 
+  for(e = list_begin(&cur->children); e!= list_end(&cur->children); e = next){
+    struct progress *p = list_entry(e, struct progress, elem); 
+    next = list_remove(e); 
+    remove_child(p);
+  }
 
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
@@ -128,7 +196,6 @@ process_exit (void)
          directory before destroying the process's page
          directory, or our active page directory will be one
          that's been freed (and cleared). */
-      printf("%s: exit(%d)\n", thread_current()->name, thread_current()->exit_status);
       cur->pagedir = NULL;
       pagedir_activate (NULL);
       pagedir_destroy (pd);
@@ -142,7 +209,7 @@ void
 process_activate (void)
 {
   struct thread *t = thread_current ();
-
+  //printf("Activating process \n"); //added for debugging purposes 
   /* Activate thread's page tables. */
   pagedir_activate (t->pagedir);
 
@@ -242,7 +309,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
 
 
   /* Allocate and activate page directory. */
-  t->pagedir = pagedir_create ();  //breaks here !!!
+  t->pagedir = pagedir_create (); 
   if (t->pagedir == NULL) 
     goto done;
   
@@ -257,9 +324,12 @@ load (const char *file_name, void (**eip) (void), void **esp)
   ASSERT(file!=NULL);
   if (file == NULL) 
     {
-      printf ("load: %s: open failed\n", file_name);
+      printf ("load: %s: open failed\n", fname);
       goto done; 
     }
+
+  file_deny_write(file); 
+
 
   /* Read and verify executable header. */
   if (file_read (file, &ehdr, sizeof ehdr) != sizeof ehdr
@@ -335,7 +405,8 @@ load (const char *file_name, void (**eip) (void), void **esp)
 
   /* Set up stack. */
   if (!setup_stack (esp, file_name)){
-     goto done;
+    //printf("Setup stack failed: %s \n", file_name); //for debugging purposes 
+    goto done;
   }
   /* Start address. */
   *eip = (void (*) (void)) ehdr.e_entry;
@@ -344,7 +415,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
 
  done:
   /* We arrive here whether the load is successful or not. */
-  file_close (file);
+  //file_close (file);
   return success;
 }
 
@@ -505,7 +576,7 @@ static bool arg_init(uint8_t * kpage, uint8_t * upage, void **esp, const char * 
     void * uarg = upage + (karg - (char *) kpage); //WUT
     
     if(push(kpage, &offs, &uarg, sizeof uarg) == NULL) {
-	return false; 
+      return false; 
     }
     argc++; 
   }
@@ -515,15 +586,17 @@ static bool arg_init(uint8_t * kpage, uint8_t * upage, void **esp, const char * 
   reverse(argc, (char**)(kpage+offs)); //reverse arguments on stack 
 
   /*push argv, argc, and fake return address*/
-  bool v = push(kpage, &offs, &argv, sizeof argv); 
-  bool c = push(kpage, &offs, &argc, sizeof argc);
-  bool returnaddr = push(kpage, &offs, &null, sizeof null);
+  if(push(kpage, &offs, &argv, sizeof argv)== NULL) return false;  
+  if(push(kpage, &offs, &argc, sizeof argc)==NULL) return false; 
+  if(push(kpage, &offs, &null, sizeof null)==NULL) return false;
+
+
 
   /*set up initial stack pointer*/
   *esp = upage + offs; //kpage or upage??
   //ASSERT(2==0);
-  //hex_dump (0, esp, 100, true);
-  return (v&&c&&returnaddr); 
+
+  return true;  
 }
 
 
@@ -544,7 +617,6 @@ setup_stack (void **esp, const char *cmd_line)
       success = install_page (upage, kpage, true);
       if (success){
         //*esp = PHYS_BASE;
-	
         success_cmd_line = arg_init(kpage, upage, esp, cmd_line);
       }else
         palloc_free_page (kpage);

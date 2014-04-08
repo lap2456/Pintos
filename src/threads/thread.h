@@ -33,8 +33,8 @@ enum thread_status
     THREAD_READY,       /* Not running but ready to run. */
     THREAD_BLOCKED,     /* Waiting for an event to trigger. */
     THREAD_DYING,        /* About to be destroyed. */
-    THREAD_SLEEPING,     /*KG added; thread put to sleep*/
-    THREAD_ZOMBIE
+    THREAD_SLEEPING    /*KG added; thread put to sleep*/
+
   };
 
 /* Thread identifier type.
@@ -129,20 +129,36 @@ struct thread
 
     /* Owned by userprog/process.c. */
     uint32_t *pagedir;                  /* Page directory. */
-    int exit_status;		//exit status will be held here
 
     //shared between userprog/process.c and thread.c
-    struct list *file_to_run;
-    struct semaphore wait_sema;	//semaphore for parent in process wait
-    struct thread *parent;	//holds the parent of this process
-    struct list children;
-    struct list_elem parent_elem;
-    struct file *self;
-    struct dir *pwd;
+    struct file * file_to_run; //file to run (executable)
+
+
+    struct list fds; //list of file descriptors 
+    int next_handle; //next handle value (???)
+
+    struct progress *progress;  //this process's completion status
+    struct list children; //list of children's progresses
+
 
     /* Owned by thread.c. */
     unsigned magic;                     /* Detects stack overflow. */
    
+  };
+
+
+  /*added*/ 
+  /*This struct keeps track of a process's completion. 
+  Held by both the parent (int its children list)
+  and by the child (in its status pointer)*/
+  struct progress 
+  { 
+    struct list_elem elem; //child list element 
+    struct lock lock; //protects reference count
+    int ref; //0 = child and parent both dead, 1 = one of the two alive, 2 = both alive
+    tid_t tid; //child thread id
+    int exit_status; //child exit code (if dead)
+    struct semaphore dead; //1 if child alive, 0 if child dead 
   };
 
 /* If false (default), use round-robin scheduler.

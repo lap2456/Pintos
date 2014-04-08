@@ -13,9 +13,11 @@
 #include "threads/vaddr.h"
 #include "devices/timer.h"
 #include "lib/kernel/list.h"
+#ifdef USERPROG
 #include "userprog/process.h"
+#include "userprog/syscall.h"
+#endif 
 
-//last edit 3/16
 
 /* Random value for struct thread's `magic' member.
    Used to detect stack overflow.  See the big comment at the top
@@ -244,9 +246,6 @@ thread_create (const char *name, int priority,
   sf->eip = switch_entry;
   sf->ebp = 0;
   
-  //added
-  t->parent = thread_current();
-  list_push_back (&thread_current()->children, &t->parent_elem);
 
   /* Add to run queue. */
   thread_unblock(t);
@@ -350,59 +349,23 @@ thread_exit (void)
   /* Remove thread from all threads list, set our status to dying,
      and schedule another process.  That process will destroy us
      when it calls thread_schedule_tail(). */
-  intr_disable ();
-  list_remove (&thread_current()->allelem);
+ 
 
- while(!list_empty (&t->children)){
-	struct thread *child = list_entry (list_pop_front (&t -> children), struct thread, parent_elem);
-	ASSERT (is_thread (child));
-	ASSERT (child->parent == t);
-	if(child ->status == THREAD_ZOMBIE)
-		slay_zombie(child);
-	else
-		child->parent = NULL;
- }
+
 #ifdef USERPROG
- if(t->pagedir)
 	process_exit();
 #endif
- if(t->parent == NULL)
-	t->status = THREAD_DYING;
- else
- {
-	//ASSERT (is_interior(&t->parent_elem));
-	list_push_back (&zombie_list, &t->elem);
-	sema_up (&t->wait_sema);
-	t->status = THREAD_ZOMBIE;
- }
+  syscall_exit(); 
 
+
+  /* Remove thread from all threads list, set our status to dying,
+and schedule another process. That process will destroy us
+when it calls thread_schedule_tail(). */
+  intr_disable ();
+  list_remove (&thread_current()->allelem);
+  thread_current ()->status = THREAD_DYING;
   schedule ();
   NOT_REACHED ();
-}
-
-void
-slay_zombie(struct thread *t)
-{
-	ASSERT(intr_get_level() == INTR_OFF);
-	ASSERT(is_thread(t));
-	if(t->parent)
-	{
-		//ASSERT(is_interior(&t->parent_elem));
-		list_remove(&t->parent_elem);
-	}
-	else
-		//ASSERT(!is_interior (&t->parent_elem));
-	list_remove (&t->elem);
-	palloc_free_page(t);
-}
-
-void
-remove_thread (struct thread *t){
-	enum intr_level old_level;    
-  	old_level = intr_disable ();
-  	list_remove (&t->allelem);
-  	palloc_free_page (t);
-  	intr_set_level (old_level);  
 }
 
 
@@ -602,13 +565,17 @@ init_thread (struct thread *t, const char *name, int priority)
   t->original_priority = priority; 
   list_init(&(t->donations)); 
   t->numDonations = 0; 
+  list_init(&t->children);
+  t->progress = NULL; 
+  list_init(&t->fds); 
+  t->next_handle = 2; 
+
 
   t->magic = THREAD_MAGIC;
   list_push_back (&all_list, &t->allelem);
   
-  //added
-  list_init (&t->children);
-  sema_init (&t->wait_sema, 0);
+
+
 }
 
 /* Allocates a SIZE-byte frame at the top of thread T's stack and
