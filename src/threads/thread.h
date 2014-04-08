@@ -1,6 +1,3 @@
-//LAST EDIT 3/16 
-
-
 /*
 * Basic thread support. Defines struct thread, which is likely
 * to be modified in all four projects. 

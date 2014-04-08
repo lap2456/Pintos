@@ -321,7 +321,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
   
   /* Open executable file. */
   file = filesys_open(fname); 
-  ASSERT(file!=NULL);
+  //ASSERT(file!=NULL);
   if (file == NULL) 
     {
       printf ("load: %s: open failed\n", fname);
