@@ -123,7 +123,7 @@ SEGFAULT occurred */
 static inline bool
 get_user (uint8_t *kdst, const uint8_t *usrc)
 {
-  int eax;
+  int eax=0;
   if(kdst >= (uint8_t *)PHYS_BASE){
     	asm ("movl $1f, %%eax; movb %2, %%al; movb %%al, %0; 1:"
        : "=m" (*kdst), "=&a" (eax) : "m" (*usrc));
@@ -151,6 +151,7 @@ devices/shutdown.h This should be seldom used, because you lose some information
 about possilbe deadlock situations, etc.) */
 static int sys_halt (void){
   shutdown_power_off(); 
+  NOT_REACHED();
 } 
 
 /*Terminates the current user program returning status to kernel. 
@@ -317,7 +318,7 @@ static int sys_open (const char *file){
 	}
 }
 
-static struct file_descriptor * lookup_fd(int handle){
+static struct file_descriptor * find_fd(int handle){
 	struct list_elem *e; 
 	struct list *s = &(thread_current()->fds); 
 	struct file_descriptor *fd; 
@@ -332,7 +333,7 @@ static struct file_descriptor * lookup_fd(int handle){
 }
 /*Returns the size in bytes of the file open as fd*/
 static int sys_filesize (int handle){
-	struct file_descriptor *fd = lookup_fd(handle); 
+	struct file_descriptor *fd = find_fd(handle); 
 	return file_length(fd->file); 
 }
 
@@ -345,7 +346,7 @@ static int sys_read (int handle, void *buffer, unsigned length){
   struct file_descriptor* fd = NULL;
 
   if (handle != STDIN_FILENO)
-    fd = lookup_fd(handle);
+    fd = find_fd(handle);
 
   lock_acquire(&file_sys_lock);
   if (!verify_pointer(buffer))
@@ -391,7 +392,7 @@ static int sys_write (int handle, void *buffer, unsigned length){
 
   /* Lookup up file descriptor. */
   if (handle != STDOUT_FILENO)
-    fd = lookup_fd (handle);
+    fd = find_fd (handle);
 
   lock_acquire (&file_sys_lock);
   while (length > 0)
@@ -402,7 +403,7 @@ static int sys_write (int handle, void *buffer, unsigned length){
       off_t retval;
 
       /* Check that we can touch this user page. */
-      if (!verify_pointer (usrc))
+      if (!verify_pointer (buffer))
         {
           lock_release (&file_sys_lock);
           thread_exit ();
@@ -445,7 +446,7 @@ so writes past end of file will return an error.) These semantics are implemente
 the file system and do not require any special effort in system call implementation.*/
 static int sys_seek (int handle, unsigned position){
 	struct file_descriptor *fd;
-  fd = lookup_fd(handle);
+  fd = find_fd(handle);
   if((off_t) position >= 0)
     file_seek(fd->file, position);
   return 0;
@@ -455,14 +456,14 @@ static int sys_seek (int handle, unsigned position){
 in bytes from the beginning of the file. */
 static int sys_tell (int handle){
 	struct file_descriptor *fd;
-  fd = lookup_fd(handle);
+  fd = find_fd(handle);
   return file_tell(fd->file);
 }
 
 /*Closes file descriptor fd. Exiting or terminating a process implicitly closes all its open
 file descriptors, as if by calling this function for each one.*/
 static int sys_close (int handle){
-	struct file_descriptor *fd = lookup_fd(handle);
+	struct file_descriptor *fd = find_fd(handle);
   lock_acquire(&file_sys_lock);
   file_close(fd->file); //file_close also allows writes
   lock_release(&file_sys_lock);

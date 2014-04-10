@@ -39,6 +39,7 @@ struct file_info {
 tid_t
 process_execute (const char *file_name) 
 {
+
   char *fn_copy;
   tid_t tid;
   char fname[16]; 
@@ -56,7 +57,7 @@ process_execute (const char *file_name)
   strlcpy(fname, file_name, sizeof fname); //added
   strtok_r(fname, " ", &saveptr); 
 
-  /* Create a new thread to execute FILE_NAME. */
+  /* Create a new thread to execute fname. */
   tid = thread_create (fname, PRI_DEFAULT, start_process, &file);
   if(tid != TID_ERROR){
     sema_down(&file.loaded); 
@@ -321,6 +322,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
   
   /* Open executable file. */
   file = filesys_open(fname); 
+  t->file_to_run = file; 
   //ASSERT(file!=NULL);
   if (file == NULL) 
     {

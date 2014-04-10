@@ -564,7 +564,7 @@ init_thread (struct thread *t, const char *name, int priority)
   /*added*/ 
   t->original_priority = priority; 
   list_init(&(t->donations)); 
-  t->numDonations = 0; 
+  t->numDonations = 0;  
   list_init(&t->children);
   t->progress = NULL; 
   list_init(&t->fds); 
