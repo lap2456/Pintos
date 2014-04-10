@@ -52,7 +52,8 @@ syscall_handler (struct intr_frame *f)
 {
   //dereference esp to get syscall number
   int *sys = (int*)(f->esp); 
-
+  if(!verify_pointer(sys))
+	sys_exit(-1);
   int args[3]; 
   copy_in(args, (uint32_t *)f->esp+1, (sizeof *args)*3); 
   int result;
