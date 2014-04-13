@@ -13,6 +13,7 @@ struct block
     char name[16];                      /* Block device name. */
     enum block_type type;                /* Type of block device. */
     block_sector_t size;                 /* Size in sectors. */
+    bool indirect;                       /*added: 0 if direct 1 if indirect*/
 
     const struct block_operations *ops;  /* Driver operations. */
     void *aux;                          /* Extra data owned by driver. */
@@ -196,6 +197,7 @@ block_register (const char *name, enum block_type type,
   strlcpy (block->name, name, sizeof block->name);
   block->type = type;
   block->size = size;
+  block->indirect = 0; //default to direct
   block->ops = ops;
   block->aux = aux;
   block->read_cnt = 0;

@@ -10,6 +10,12 @@
 /* Identifies an inode. */
 #define INODE_MAGIC 0x494e4f44
 
+#define MAX_FSIZE 8459264 //added
+
+struct indirect_block{
+  block_sector_t blocks[128];
+}
+
 /* On-disk inode.
    Must be exactly BLOCK_SECTOR_SIZE bytes long. */
 struct inode_disk
@@ -17,7 +23,11 @@ struct inode_disk
     block_sector_t start;               /* First data sector. */
     off_t length;                       /* File size in bytes. */
     unsigned magic;                     /* Magic number. */
-    uint32_t unused[125];               /* Not used. */
+    //types of pointers/blocks
+    block_sector_t direct[10];                
+    block_sector_t *indirect;
+    block_sector_t *doubly_indirect;
+    uint32_t unused[113];
   };
 
 /* Returns the number of sectors to allocate for an inode SIZE
@@ -37,6 +47,8 @@ struct inode
     bool removed;                       /* True if deleted, false otherwise. */
     int deny_write_cnt;                 /* 0: writes ok, >0: deny writes. */
     struct inode_disk data;             /* Inode content. */
+    struct lock inode_lock;             /*added: lock for file extension*/
+    off_t total_length;                 /*added:used for read race condition after EOF*/
   };
 
 /* Returns the block device sector that contains byte offset POS
@@ -171,8 +183,9 @@ inode_close (struct inode *inode)
   if (--inode->open_cnt == 0)
     {
       /* Remove from inode list and release lock. */
+      //added: RELEASE LOCK
       list_remove (&inode->elem);
- 
+      //added: WRITE TO DISK HERE
       /* Deallocate blocks if removed. */
       if (inode->removed) 
         {
