@@ -14,20 +14,23 @@
 
 struct indirect_block{
   block_sector_t blocks[128];
-}
+};
+
+struct doubly_indirect{
+  indirect_block indirects[128];
+};
 
 /* On-disk inode.
    Must be exactly BLOCK_SECTOR_SIZE bytes long. */
 struct inode_disk
   {
-    block_sector_t start;               /* First data sector. */
     off_t length;                       /* File size in bytes. */
     unsigned magic;                     /* Magic number. */
     //types of pointers/blocks
     block_sector_t direct[10];                
-    block_sector_t *indirect;
-    block_sector_t *doubly_indirect;
-    uint32_t unused[113];
+    struct indirect_block *indirect;
+    struct doubly_indirect *doubly_indirect;
+    uint32_t unused[114];
   };
 
 /* Returns the number of sectors to allocate for an inode SIZE
@@ -59,8 +62,24 @@ static block_sector_t
 byte_to_sector (const struct inode *inode, off_t pos) 
 {
   ASSERT (inode != NULL);
-  if (pos < inode->data.length)
-    return inode->data.start + pos / BLOCK_SECTOR_SIZE;
+ //added
+  if (pos < inode->data.length){
+    if(pos < 10*BLOCK_SECTOR_SIZE)
+      return inode->data.direct[pos/BLOCK_SECTOR_SIZE];
+    else if(pos < BLOCK_SECTOR_SIZE*(10 + 128))
+    {
+      pos-=10*BLOCK_SECTOR_SIZE; //move past direct blocks
+      //access block array in the indirect block
+      return inode->data.indirect.blocks[pos/BLOCK_SECTOR_SIZE]; 
+    }
+    else{ //doubly indirect block
+      pos-=BLOCK_SECTOR_SIZE*(10 + 128); //move past direct blocks and indirect block
+      int indirect_index = pos/BLOCK_SECTOR_SIZE; //get to the right indirect block
+      pos= pos%BLOCK_SECTOR_SIZE; //get the right block
+      return inode->data.doubly_indirect->indirects[indirect_index]->blocks[pos];
+    }
+
+  }
   else
     return -1;
 }
@@ -150,6 +169,7 @@ inode_open (block_sector_t sector)
   inode->deny_write_cnt = 0;
   inode->removed = false;
   block_read (fs_device, inode->sector, &inode->data);
+  inode->total_length = inode->data.length; //added
   return inode;
 }
 
@@ -296,8 +316,13 @@ inode_write_at (struct inode *inode, const void *buffer_, off_t size,
 
       if (sector_ofs == 0 && chunk_size == BLOCK_SECTOR_SIZE)
         {
+          //first write to direct blocks
+          //if needed writhe to indirect
+          //if needed write to doublys
+
+
           /* Write full sector directly to disk. */
-          block_write (fs_device, sector_idx, buffer + bytes_written);
+          //block_write (fs_device, sector_idx, buffer + bytes_written);
         }
       else 
         {
