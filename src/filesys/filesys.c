@@ -37,7 +37,12 @@ filesys_done (void)
 {
   free_map_close ();
 }
-
+
+
+bool
+filesys_create (const char *name){
+  filesys_create(name, 0);
+}
 /* Creates a file named NAME with the given INITIAL_SIZE.
    Returns true if successful, false otherwise.
    Fails if a file named NAME already exists,

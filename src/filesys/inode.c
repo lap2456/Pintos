@@ -64,6 +64,7 @@ byte_to_sector (const struct inode *inode, off_t pos)
   ASSERT (inode != NULL);
  //added
   if (pos < inode->data.length){
+    //access first 10 direct blocks
     if(pos < 10*BLOCK_SECTOR_SIZE)
       return inode->data.direct[pos/BLOCK_SECTOR_SIZE];
     else if(pos < BLOCK_SECTOR_SIZE*(10 + 128))
@@ -75,7 +76,7 @@ byte_to_sector (const struct inode *inode, off_t pos)
     else{ //doubly indirect block
       pos-=BLOCK_SECTOR_SIZE*(10 + 128); //move past direct blocks and indirect block
       int indirect_index = pos/BLOCK_SECTOR_SIZE; //get to the right indirect block
-      pos= pos%BLOCK_SECTOR_SIZE; //get the right block
+      pos-=BLOCK_SECTOR_SIZE*indirect_index; //get the right block
       return inode->data.doubly_indirect->indirects[indirect_index]->blocks[pos];
     }
 
@@ -322,7 +323,7 @@ inode_write_at (struct inode *inode, const void *buffer_, off_t size,
 
 
           /* Write full sector directly to disk. */
-          //block_write (fs_device, sector_idx, buffer + bytes_written);
+          block_write (fs_device, sector_idx, buffer + bytes_written);
         }
       else 
         {
