@@ -19,5 +19,11 @@ off_t inode_write_at (struct inode *, const void *, off_t size, off_t offset);
 void inode_deny_write (struct inode *);
 void inode_allow_write (struct inode *);
 off_t inode_length (const struct inode *);
+block_sector_t extend(struct inode * inode, off_t pos);
+bool allocate_sectors(size_t sectors, size_t *direct, size_t *indirect, 
+  size_t *doubly);
+size_t allocate_direct(block_sector_t *dir, int index, size_t sectors);
+size_t allocate_indirect(block_sector_t *ind, int index, size_t sectors);
+size_t allocate_doubly(block_sector_t *dbl, int index, size_t sectors);
 
 #endif /* filesys/inode.h */

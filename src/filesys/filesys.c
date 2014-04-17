@@ -39,10 +39,7 @@ filesys_done (void)
 }
 
 
-bool
-filesys_create (const char *name){
-  filesys_create(name, 0);
-}
+
 /* Creates a file named NAME with the given INITIAL_SIZE.
    Returns true if successful, false otherwise.
    Fails if a file named NAME already exists,
