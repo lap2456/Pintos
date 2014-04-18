@@ -130,11 +130,12 @@ block_sector_t byte_to_inode_block(struct inode *inode, off_t pos, bool read){
       free(ind); 
       return ret; 
     }
-  } else { //past EOF
+  } 
+  //else { //past EOF
     //ASSERT(1==0); //FAILS HERE 
-    if (true) return 0; //cannot read past EOF
-    else return extend(inode, pos); 
-  }
+    //if (true) return 0; //cannot read past EOF
+    //else return extend(inode, pos); 
+  //}
   return -1;
 }
 
@@ -208,6 +209,7 @@ block_sector_t extend(struct inode * inode, off_t pos){
     new = &i[new_rem-1];
   }
   inode->data.length = pos;
+
   block_write (fs_device, inode->sector, &inode->data);
   return new; 
 }
@@ -233,16 +235,13 @@ bool allocate_sectors(size_t sectors, size_t *direct, size_t *indirect,
   i = MIN(sectors, INDIRECT_BLOCKS); 
   sectors -= i; 
 
-  dbl = MIN(sectors/DOUBLY_INDIRECT_BLOCKS, DOUBLY_INDIRECT_BLOCKS);
-  sectors -= dbl*INDIRECT_BLOCKS; 
-
+  dbl = MIN(sectors, DOUBLY_INDIRECT_BLOCKS*INDIRECT_BLOCKS);
+  sectors -= dbl; 
+  
   direct = d; 
   indirect = i; 
   doubly = dbl; 
 
-  //if(sectors){
-  //  return false; 
-  //} 
   return true; 
 }
 
@@ -313,6 +312,8 @@ inode_create (block_sector_t sector, off_t length)
   bool success = false;
 
   ASSERT (length >= 0);
+  if(length > MAX_FSIZE)
+      return false;
 
   /* If this assertion fails, the inode structure is not exactly
      one sector in size, and you should fix that. */
@@ -332,9 +333,12 @@ inode_create (block_sector_t sector, off_t length)
 
       /*added. allocate sectors*/ 
       success = allocate_sectors(sectors, &dir, &ind, &dbl);
-
+      ASSERT(success);
       if(!success){ 
         //free everything
+        free(disk_inode);
+        free(indirect);
+        free(doubly);
         return false; 
       }
      
@@ -524,15 +528,19 @@ inode_write_at (struct inode *inode, const void *buffer_, off_t size,
   const uint8_t *buffer = buffer_;
   off_t bytes_written = 0;
   uint8_t *bounce = NULL;
-
   if (inode->deny_write_cnt)
     return 0;
 
-  while (size > 0) 
+  if(offset+size >inode_length(inode))
+    extend(inode, offset+size);
+
+   while (size > 0) 
     {
       /* Sector to write, starting byte offset within sector. */
       block_sector_t sector_idx = byte_to_inode_block(inode, offset, false);
       int sector_ofs = offset % BLOCK_SECTOR_SIZE;
+
+
 
       /* Bytes left in inode, bytes left in sector, lesser of the two. */
       off_t inode_left = inode_length (inode) - offset;
