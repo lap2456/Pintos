@@ -258,7 +258,7 @@ static int sys_create (const char *file, unsigned initial_size){
 	if (verify_pointer(file)){ 
 	const char *kfile = copy_in_string(file); 
 	lock_acquire (&file_sys_lock);
-	int result = filesys_create (kfile, initial_size);
+	int result = filesys_create (kfile, initial_size, false);
 	lock_release (&file_sys_lock);
 	palloc_free_page(kfile); 
 	return result;
