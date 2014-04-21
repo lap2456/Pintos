@@ -108,15 +108,15 @@ syscall_handler (struct intr_frame *f)
     case SYS_MKDIR:
       result = sys_mkdir(args[0]);
       break;
-    //case SYS_READDIR:
-      //result = sys_readdir(args[0], args[1]);
-      //break;
-    //case SYS_ISDIR:
-      //result = sys_isdir(args[0]);
-      //break;
-    //case SYS_INUMBER:
-      //result = sys_inumber(args[0]);
-      //break;
+    case SYS_READDIR:
+      result = sys_readdir(args[0], args[1]);
+      break;
+    case SYS_ISDIR:
+      result = sys_isdir(args[0]);
+      break;
+    case SYS_INUMBER:
+      result = sys_inumber(args[0]);
+      break;
     default: 
       printf("Error in system call number %d. Exiting.", *sys); 
       sys_halt(); 
@@ -538,15 +538,16 @@ static bool sys_mkdir (const char* dir){
     lock_release(&file_sys_lock);
     return result;
 }
-/*
+
 static bool sys_readdir (int handle, char* name){
   struct file_descriptor *fd;
-  fd = find_fd(handle);  
-  bool isDirectory = inode_is_dir(fd->file->inode);
+  fd = find_fd(handle);
+  const struct inode *inode = file_get_inode(fd->file);  
+  bool isDirectory = inode_is_dir(inode);
   if(!isDirectory)
 	return false;
-  struct dir *dir = dir_open(fd->file->inode);
-  if(!dir_readdir(dir, name)
+  struct dir *dir = dir_open(inode);
+  if(!dir_readdir(dir, name))
 	return false;
   return true;
 }
@@ -554,15 +555,16 @@ static bool sys_readdir (int handle, char* name){
 static bool sys_isdir (int handle){
   struct file_descriptor *fd;
   fd = find_fd(handle);
-  bool isDirectory = inode_is_dir(&fd->file->inode);
+  const struct inode *inode = file_get_inode(fd->file);
+  bool isDirectory = inode_is_dir(inode);
   return isDirectory;
 }
 
 static int sys_inumber (int handle){
   struct file_descriptor *fd;
   fd = find_fd(handle);
-  int inumber = inode_get_inumber(&fd->file->inode);
+  const struct inode *inode = file_get_inode(fd->file);
+  int inumber = inode_get_inumber(inode);
   return inumber;
-
 }
-*/
+
