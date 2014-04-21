@@ -54,18 +54,13 @@ filesys_create (const char *name, off_t initial_size, bool isDirectory)
 {
   block_sector_t inode_sector = 0;
   struct dir *dir = get_this_dir(name);
-  ASSERT(dir != NULL);
   char* file_name = get_file_name(name);
   bool success = false;
   if(strcmp(file_name, ".") != 0 && strcmp(file_name, "..") != 0){	
-	//ASSERT (dir != NULL);
-	ASSERT (free_map_allocate (1, &inode_sector));
-    	ASSERT (inode_create (inode_sector, initial_size, isDirectory));
-	ASSERT (dir_add (dir, file_name, inode_sector));
-	//success = (dir != NULL
-                  //&& free_map_allocate (1, &inode_sector)
-                  //&& inode_create (inode_sector, initial_size, isDirectory)
-                  //&& dir_add (dir, file_name, inode_sector));
+	success = (dir != NULL
+                  && free_map_allocate (1, &inode_sector)
+                  && inode_create (inode_sector, initial_size, isDirectory)
+                  && dir_add (dir, file_name, inode_sector));
   }
   if (!success && inode_sector != 0) 
     free_map_release (inode_sector, 1);
@@ -103,7 +98,7 @@ filesys_open (const char *name)
 	}
 	//if the dir is a root dir and the length of the name is 0
 	//or if the filename is "."
-	else if((dir_is_root(dir) && strlen(file_name) == 0)||
+	else if((is_root_dir(dir) && strlen(file_name) == 0)||
 		strcmp(file_name, ".") == 0)
 	{
 	    //then free filename and return the dir as a file
@@ -112,7 +107,7 @@ filesys_open (const char *name)
 	}
 	//otherwise lookup the dir
 	else
-    	    dir_lookup (dir, name, &inode);
+    	    dir_lookup (dir, file_name, &inode);
     }  	
     dir_close (dir);
     free(file_name);
@@ -134,7 +129,7 @@ filesys_remove (const char *name)
 {
   struct dir *dir = get_this_dir (name);
   char* file_name = get_file_name(name);
-  bool success = dir != NULL && dir_remove (dir, name);
+  bool success = dir != NULL && dir_remove (dir, file_name);
   dir_close (dir); 
   free(file_name);
 
@@ -158,8 +153,7 @@ bool filesys_chdir (const char* name)
 		return false;
 	    }
 	}
-	else if((dir_is_root(dir) && strlen(file_name) == 0) ||
-		strcmp(file_name, ".") == 0)
+	else if((is_root_dir(dir) && strlen(file_name) == 0) || strcmp(file_name, ".") == 0)
 	{
 	    cur->pwd = dir;
 	    free(file_name);

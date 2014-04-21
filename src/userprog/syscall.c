@@ -9,6 +9,7 @@
 #include "filesys/file.h"
 #include "filesys/filesys.h"
 #include "filesys/directory.h"
+#include "filesys/inode.h"
 #include "userprog/process.h"
 #include "userprog/exception.h"
 #include "userprog/pagedir.h"
@@ -35,7 +36,7 @@ static bool sys_chdir (const char* dir);
 static bool sys_mkdir (const char* dir);
 static bool sys_readdir (int fd, char* name);
 static bool sys_isdir (int fd);
-static bool sys_inumber (int fd);
+static int sys_inumber (int fd);
 
 static bool verify_pointer(const void*);
 
@@ -464,7 +465,7 @@ zeros. (However, in Pintos, files will have a fixed length until project 4 is co
 so writes past end of file will return an error.) These semantics are implemented in
 the file system and do not require any special effort in system call implementation.*/
 static int sys_seek (int handle, unsigned position){
-	struct file_descriptor *fd;
+  struct file_descriptor *fd;
   fd = find_fd(handle);
   if((off_t) position >= 0)
     file_seek(fd->file, position);
@@ -474,7 +475,7 @@ static int sys_seek (int handle, unsigned position){
 /*Returns the position of the next byte to be read or written in open file fd, expressed
 in bytes from the beginning of the file. */
 static int sys_tell (int handle){
-	struct file_descriptor *fd;
+  struct file_descriptor *fd;
   fd = find_fd(handle);
   return file_tell(fd->file);
 }
@@ -482,7 +483,7 @@ static int sys_tell (int handle){
 /*Closes file descriptor fd. Exiting or terminating a process implicitly closes all its open
 file descriptors, as if by calling this function for each one.*/
 static int sys_close (int handle){
-	struct file_descriptor *fd = find_fd(handle);
+  struct file_descriptor *fd = find_fd(handle);
   lock_acquire(&file_sys_lock);
   file_close(fd->file); //file_close also allows writes
   lock_release(&file_sys_lock);
@@ -537,11 +538,31 @@ static bool sys_mkdir (const char* dir){
     lock_release(&file_sys_lock);
     return result;
 }
+/*
+static bool sys_readdir (int handle, char* name){
+  struct file_descriptor *fd;
+  fd = find_fd(handle);  
+  bool isDirectory = inode_is_dir(fd->file->inode);
+  if(!isDirectory)
+	return false;
+  struct dir *dir = dir_open(fd->file->inode);
+  if(!dir_readdir(dir, name)
+	return false;
+  return true;
+}
 
-//static bool sys_readdir (int fd, char* name){
-//    
-//}
+static bool sys_isdir (int handle){
+  struct file_descriptor *fd;
+  fd = find_fd(handle);
+  bool isDirectory = inode_is_dir(&fd->file->inode);
+  return isDirectory;
+}
 
-//static bool sys_isdir (int fd)
+static int sys_inumber (int handle){
+  struct file_descriptor *fd;
+  fd = find_fd(handle);
+  int inumber = inode_get_inumber(&fd->file->inode);
+  return inumber;
 
-//static bool sys_inumber (int fd)
+}
+*/

@@ -55,7 +55,6 @@ struct inode
     struct inode_disk data;             /* Inode content. */
     struct lock inode_lock;		//for when we need to use synchronizations
     off_t total_length;                 	/*added.used for read race condition after EOF*/
-    off_t data_length;                  	/*added. total number of data bytes stored*/
 };
 
 /*Added. Returns the block within INODE that corresponds to the 
@@ -172,12 +171,12 @@ inode_create (block_sector_t sector, off_t length, bool isDirectory)
     ASSERT (sizeof *disk_inode == BLOCK_SECTOR_SIZE);
 
     disk_inode = calloc(1, sizeof *disk_inode);
-    disk_inode->length = length;
-    disk_inode->magic = INODE_MAGIC;
-    disk_inode->isDirectory = isDirectory;
-    disk_inode->parent_inode = ROOT_DIR_SECTOR;
     if (disk_inode != NULL)
     {
+        disk_inode->length = length;
+    	disk_inode->magic = INODE_MAGIC;
+    	disk_inode->isDirectory = isDirectory;
+   	disk_inode->parent_inode = ROOT_DIR_SECTOR;
     	size_t sectors = bytes_to_sectors (length);    
 
       	size_t num_indirects = sectors/128;
@@ -222,8 +221,7 @@ inode_create (block_sector_t sector, off_t length, bool isDirectory)
         free(disk_inode);
 	return true;
     }
-    else
-	free(disk_inode);
+    free(disk_inode);
     return false;
 }
 
@@ -291,7 +289,7 @@ inode_close (struct inode *inode)
     /* Ignore null pointer. */
     if (inode == NULL)
     	return;
-    block_write(fs_device, inode->sector, &inode->data);
+    
     /* Release resources if this was the last opener. */
     if (--inode->open_cnt == 0)
     {
@@ -305,6 +303,8 @@ inode_close (struct inode *inode)
             free_map_release (inode->sector, 1);
             inode_deallocate (inode); 
         }
+        else
+	    block_write(fs_device, inode->sector, &inode->data);
    	
 
         free (inode); 
@@ -329,14 +329,13 @@ inode_read_at (struct inode *inode, void *buffer_, off_t size, off_t offset)
     uint8_t *buffer = buffer_;
     off_t bytes_read = 0;
 
+    if(offset >= inode->data.length)
+	return bytes_read;
  
     while (size > 0) 
     {
      	/* Disk sector to read, starting byte offset within sector. */
       	block_sector_t sector_idx = byte_to_inode_block (inode, offset, true);
-      	//if trying to read past EOF
-	if(sector_idx == -1)
-	    return 0;
 	int sector_ofs = offset % BLOCK_SECTOR_SIZE;
 
       	/* Bytes left in inode, bytes left in sector, lesser of the two. */
@@ -358,11 +357,15 @@ inode_read_at (struct inode *inode, void *buffer_, off_t size, off_t offset)
       	{
             block_read (fs_device, sector_idx, buffer);
             memcpy (buffer, buffer + sector_ofs, chunk_size);
+	    char zeros[sector_ofs];
+	    memset (zeros, 0, sector_ofs);
+	    memcpy (buffer+chunk_size, zeros, sector_ofs);
       	}
       	else if(sector_ofs == 0 && chunk_size != BLOCK_SECTOR_SIZE)
       	{
             block_read (fs_device, sector_idx, buffer+bytes_read);
             char zeros[BLOCK_SECTOR_SIZE-chunk_size];
+	    memset (zeros, 0, BLOCK_SECTOR_SIZE-chunk_size);
             memcpy (buffer+bytes_read+chunk_size, zeros, BLOCK_SECTOR_SIZE-chunk_size);
       	}
       	/* Advance. */
@@ -439,6 +442,7 @@ inode_write_at (struct inode *inode, const void *buffer_, off_t size,
           
             memcpy (bounce + sector_ofs, buffer + bytes_written, chunk_size);
             block_write (fs_device, sector_idx, bounce);
+	    free (bounce);
         }
 
         /* Advance. */
@@ -446,8 +450,6 @@ inode_write_at (struct inode *inode, const void *buffer_, off_t size,
         offset += chunk_size;
         bytes_written += chunk_size;
     }
-    free (bounce);
-
     return bytes_written;
 }
 
@@ -510,6 +512,11 @@ void inode_deallocate_indirect (block_sector_t *sector, size_t data_ptr)
 block_sector_t inode_return_parent (const struct inode *inode)
 {
   return inode->data.parent_inode;
+}
+
+int inode_return_open_cnt (const struct inode *inode)
+{
+    return inode->open_cnt;
 }
 
 bool inode_add_parent (block_sector_t parent_inode, block_sector_t child_inode)
