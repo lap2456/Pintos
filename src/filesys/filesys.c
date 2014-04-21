@@ -6,6 +6,11 @@
 #include "filesys/free-map.h"
 #include "filesys/inode.h"
 #include "filesys/directory.h"
+#include "threads/thread.h"
+
+#define ASCII_SLASH 47
+
+struct dir* get_this_dir (const char* name);
 
 /* Partition that contains the file system. */
 struct block *fs_device;
@@ -48,14 +53,19 @@ bool
 filesys_create (const char *name, off_t initial_size, bool isDirectory) 
 {
   block_sector_t inode_sector = 0;
-  struct dir *dir = dir_open_root ();
+  struct dir *dir = get_this_dir(name);
+  ASSERT(dir != NULL);
   char* file_name = get_file_name(name);
   bool success = false;
   if(strcmp(file_name, ".") != 0 && strcmp(file_name, "..") != 0){	
-	success = (dir != NULL
-                  && free_map_allocate (1, &inode_sector)
-                  && inode_create (inode_sector, initial_size, isDirectory)
-                  && dir_add (dir, name, inode_sector));
+	//ASSERT (dir != NULL);
+	ASSERT (free_map_allocate (1, &inode_sector));
+    	ASSERT (inode_create (inode_sector, initial_size, isDirectory));
+	ASSERT (dir_add (dir, file_name, inode_sector));
+	//success = (dir != NULL
+                  //&& free_map_allocate (1, &inode_sector)
+                  //&& inode_create (inode_sector, initial_size, isDirectory)
+                  //&& dir_add (dir, file_name, inode_sector));
   }
   if (!success && inode_sector != 0) 
     free_map_release (inode_sector, 1);
@@ -75,7 +85,7 @@ filesys_open (const char *name)
     //if the name has no length then return null
     if(strlen(name) == 0)
 	return NULL;
-    struct dir *dir = dir_open_root ();
+    struct dir *dir = get_this_dir(name);
     char* file_name = get_file_name(name); //grab the filename;
     struct inode *inode = NULL;
     //if not a directory
@@ -122,13 +132,54 @@ filesys_open (const char *name)
 bool
 filesys_remove (const char *name) 
 {
-  struct dir *dir = dir_open_root ();
+  struct dir *dir = get_this_dir (name);
   char* file_name = get_file_name(name);
   bool success = dir != NULL && dir_remove (dir, name);
   dir_close (dir); 
   free(file_name);
 
   return success;
+}
+
+bool filesys_chdir (const char* name)
+{
+    struct dir* dir = get_this_dir(name);
+    char* file_name = get_file_name(name);
+    struct inode *inode = NULL;
+    struct thread *cur = thread_current();
+    
+    if(dir != NULL)
+    {
+	if(strcmp(file_name, "..") == 0)
+	{
+	    if(!dir_get_parent(dir, &inode))
+	    {
+		free(file_name);
+		return false;
+	    }
+	}
+	else if((dir_is_root(dir) && strlen(file_name) == 0) ||
+		strcmp(file_name, ".") == 0)
+	{
+	    cur->pwd = dir;
+	    free(file_name);
+	    return true;
+	}
+	else
+	    dir_lookup(dir, file_name, &inode);
+    }
+    
+    dir_close(dir);
+    free(file_name);
+
+    dir = dir_open (inode);
+    if(dir)
+    {
+	dir_close(cur->pwd);
+	cur->pwd=dir;
+	return true;
+    }
+    return false;
 }
 
 /* Formats the file system. */
@@ -143,6 +194,51 @@ do_format (void)
   printf ("done.\n");
 }
 
+struct dir* get_this_dir (const char* name)
+{
+  char string[strlen(name) + 1];
+  memcpy(string, name, strlen(name) + 1);
+  char *save_ptr, *next_token = NULL;
+  char *token = strtok_r(string, "/", &save_ptr);
+  struct dir* dir;
+  struct thread *cur = thread_current();
+  if(string[0] == ASCII_SLASH || !thread_current()->pwd)	
+	dir = dir_open_root();
+  else
+	dir = dir_reopen(thread_current()->pwd);
+  if(token)
+	next_token = strtok_r (NULL, "/", &save_ptr);
+  while (next_token != NULL)
+  {
+	if(strcmp(token, ".") != 0)
+	{
+	    struct inode *inode;
+	    if(strcmp(token, "..") == 0)
+	    {
+		if(!dir_get_parent(dir, &inode)){
+		    return NULL;
+		}
+	    }
+	    else
+	    {
+		if(!dir_lookup(dir, token, &inode)){
+		    return NULL;
+		}
+	    }
+	    if (inode_is_dir(inode))
+	    {
+		dir_close(dir);
+		dir = dir_open(inode);
+	    }
+	    else
+	       	inode_close(inode);
+	}
+	token = next_token;
+	next_token = strtok_r(NULL, "/", &save_ptr);
+  }
+  return dir;
+}
+
 char* get_file_name (const char* name)
 {
   char s[strlen(name) + 1];
@@ -151,10 +247,7 @@ char* get_file_name (const char* name)
   char *token, *save_ptr, *prev_token = "";
   for (token = strtok_r(s, "/", &save_ptr); token != NULL;
        token = strtok_r (NULL, "/", &save_ptr))
-    {
-
       prev_token = token;
-    }
   char *file_name = malloc(strlen(prev_token) + 1);
   memcpy(file_name, prev_token, strlen(prev_token) + 1);
   return file_name;

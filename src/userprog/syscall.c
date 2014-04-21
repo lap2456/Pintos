@@ -31,7 +31,11 @@ static int sys_write (int handle, void *buffer, unsigned size);
 static int sys_seek (int handle, unsigned position);
 static int sys_tell (int handle);
 static int sys_close (int handle);
-
+static bool sys_chdir (const char* dir);
+static bool sys_mkdir (const char* dir);
+static bool sys_readdir (int fd, char* name);
+static bool sys_isdir (int fd);
+static bool sys_inumber (int fd);
 
 static bool verify_pointer(const void*);
 
@@ -58,45 +62,60 @@ syscall_handler (struct intr_frame *f)
   copy_in(args, (uint32_t *)f->esp+1, (sizeof *args)*3); 
   int result;
   switch(*sys){ //add all args in 
-    case 0:
+    case SYS_HALT:
       result = sys_halt();
       break; 
-    case 1:
+    case SYS_EXIT:
       result = sys_exit(args[0]);
       break;  
-    case 2: 
+    case SYS_EXEC: 
       result = sys_exec((const char *)args[0]); 
       break; 
-    case 3: 
+    case SYS_WAIT: 
       result = sys_wait((tid_t)args[0]); 
       break; 
-    case 4: 
+    case SYS_CREATE: 
       result = sys_create((const char*)args[0], (unsigned)args[1]); 
       break; 
-    case 5:
+    case SYS_REMOVE:
       result = sys_remove((const char*)args[0]);
       break;
-    case 6: 
+    case SYS_OPEN: 
       result = sys_open((const char*)args[0]);
       break; 
-    case 7:  
+    case SYS_FILESIZE:  
       result = sys_filesize(args[0]); 
       break; 
-    case 8: 
+    case SYS_READ: 
       result = sys_read(args[0], (char *)args[1], (unsigned)args[2]);
       break; 
-    case 9: 
+    case SYS_WRITE: 
       result = sys_write(args[0], (const void*)args[1], (unsigned)args[2]); 
       break; 
-    case 10: 
+    case SYS_SEEK: 
       result = sys_seek(args[0], (unsigned)args[1]); 
       break; 
-    case 11: 
+    case SYS_TELL: 
       result = sys_tell(args[0]); 
       break; 
-    case 12:
+    case SYS_CLOSE:
       result = sys_close(args[0]); 
       break; 
+    case SYS_CHDIR:
+      result = sys_chdir(args[0]);
+      break;
+    case SYS_MKDIR:
+      result = sys_mkdir(args[0]);
+      break;
+    //case SYS_READDIR:
+      //result = sys_readdir(args[0], args[1]);
+      //break;
+    //case SYS_ISDIR:
+      //result = sys_isdir(args[0]);
+      //break;
+    //case SYS_INUMBER:
+      //result = sys_inumber(args[0]);
+      //break;
     default: 
       printf("Error in system call number %d. Exiting.", *sys); 
       sys_halt(); 
@@ -494,4 +513,35 @@ syscall_exit (void)
   return;
 }
 
+static bool
+sys_chdir(const char *dir)
+{
+    lock_acquire(&file_sys_lock);
+    if (!verify_pointer(dir))
+    {
+        lock_release(&file_sys_lock);
+        thread_exit();
+    }
+    bool result = filesys_chdir(dir);
+    lock_release(&file_sys_lock);
+    return result;
+}
 
+static bool sys_mkdir (const char* dir){
+    lock_acquire(&file_sys_lock);
+    if (!verify_pointer(dir)){
+	lock_release(&file_sys_lock);
+	thread_exit();
+    }
+    bool result = filesys_create(dir, 0, true);
+    lock_release(&file_sys_lock);
+    return result;
+}
+
+//static bool sys_readdir (int fd, char* name){
+//    
+//}
+
+//static bool sys_isdir (int fd)
+
+//static bool sys_inumber (int fd)

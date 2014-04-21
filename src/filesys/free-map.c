@@ -12,7 +12,7 @@ static struct bitmap *free_map;      /* Free map, one bit per sector. */
 void
 free_map_init (void) 
 {
-  free_map = bitmap_create (block_size (fs_device));
+  free_map = bitmap_create (block_size (fs_device)*4);
   if (free_map == NULL)
     PANIC ("bitmap creation failed--file system device is too large");
   bitmap_mark (free_map, FREE_MAP_SECTOR);
@@ -53,7 +53,6 @@ free_map_release (block_sector_t sector, size_t cnt)
 void
 free_map_open (void) 
 {
-  ASSERT(1==0);
   free_map_file = file_open (inode_open (FREE_MAP_SECTOR));
   if (free_map_file == NULL)
     PANIC ("can't open free map");

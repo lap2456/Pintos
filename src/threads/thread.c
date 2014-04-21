@@ -17,7 +17,6 @@
 #include "userprog/syscall.h"
 
 
-
 /* Random value for struct thread's `magic' member.
    Used to detect stack overflow.  See the big comment at the top
    of thread.h for details. */
@@ -117,6 +116,7 @@ thread_init (void)
   init_thread (initial_thread, "main", PRI_DEFAULT);
   initial_thread->status = THREAD_RUNNING;
   initial_thread->tid = allocate_tid ();
+  initial_thread->pwd = NULL;
 }
 
 /* Starts preemptive thread scheduling by enabling interrupts.
@@ -244,8 +244,10 @@ thread_create (const char *name, int priority,
   sf = alloc_frame (t, sizeof *sf);
   sf->eip = switch_entry;
   sf->ebp = 0;
-  
-
+  if(thread_current()->pwd)
+    t->pwd = dir_reopen(thread_current()->pwd);
+  else
+    t->pwd = NULL;
   /* Add to run queue. */
   thread_unblock(t);
   

@@ -99,7 +99,8 @@ start_process (void *file_name_)
     f->p->exit_status = -1; 
     sema_init(&f->p->dead, 0); 
   }
-
+  if(!thread_current()->pwd)
+	thread_current()->pwd = dir_open_root();
   f->success = success; //success = true if loaded
   sema_up(&f->loaded); //notify parent thread of status of load
 
@@ -184,6 +185,8 @@ process_exit (void)
     next = list_remove(e); 
     remove_child(p);
   }
+  if(thread_current()->pwd)
+	dir_close(thread_current()->pwd);
 
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */

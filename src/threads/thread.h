@@ -137,7 +137,7 @@ struct thread
     struct progress *progress;  //this process's completion status
     struct list children; //list of children's progresses
 
-
+    struct dir *pwd;
     /* Owned by thread.c. */
     unsigned magic;                     /* Detects stack overflow. */
    
