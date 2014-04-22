@@ -119,6 +119,9 @@ thread_init (void)
   initial_thread->pwd = NULL;
 }
 
+void thread_initmore(void){
+  initial_thread->pwd = dir_open_root(); 
+}
 /* Starts preemptive thread scheduling by enabling interrupts.
    Also creates the idle thread. */
 void

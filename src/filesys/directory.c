@@ -150,17 +150,23 @@ dir_add (struct dir *dir, const char *name, block_sector_t inode_sector)
   ASSERT (dir != NULL);
   ASSERT (name != NULL);
 
+  name = get_file_name(name);
+  
+    /* Check NAME for validity. */
+  if (name == '\0' || strlen (name) > NAME_MAX)
+    return false; 
+
   inode_lock(dir_get_inode(dir));
-  /* Check NAME for validity. */
-  if (*name == '\0' || strlen (name) > NAME_MAX)
-    goto done;
+
+
 
   /* Check that NAME is not in use. */
   if (lookup (dir, name, NULL, NULL))
     goto done;
 
-  if(!inode_add_parent(inode_get_inumber(dir_get_inode(dir)), inode_sector))
-    goto done;
+
+  //if(!inode_add_parent(inode_get_inumber(dir_get_inode(dir)), inode_sector))
+  //  goto done;
 
   /* Set OFS to offset of free slot.
      If there are no free slots, then it will be set to the

@@ -38,6 +38,7 @@
 #include "filesys/fsutil.h"
 #endif
 
+
 /* Page directory with kernel mappings only. */
 uint32_t *init_page_dir;
 
@@ -68,6 +69,7 @@ static void usage (void);
 #ifdef FILESYS
 static void locate_block_devices (void);
 static void locate_block_device (enum block_type, const char *name);
+
 #endif
 
 int main (void) NO_RETURN;
@@ -125,6 +127,8 @@ main (void)
   ide_init ();
   locate_block_devices ();
   filesys_init (format_filesys);
+  thread_initmore(); //ADDED
+
 #endif
 
   printf ("Boot complete.\n");
@@ -340,7 +344,7 @@ run_actions (char **argv)
       a->function (argv);
       argv += a->argc;
     }
-  
+
 }
 
 /* Prints a kernel command line help message and powers off the

@@ -22,8 +22,6 @@
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmd_line, void (**eip) (void), void **esp);
 
-
-
 struct file_info { 
   const char * file_name; //name of file to be executed
   struct semaphore loaded; //keeps track of whether file is successfully loaded
@@ -99,8 +97,13 @@ start_process (void *file_name_)
     f->p->exit_status = -1; 
     sema_init(&f->p->dead, 0); 
   }
-  if(!thread_current()->pwd)
-	thread_current()->pwd = dir_open_root();
+  
+  //added
+  if(thread_current()->pwd==NULL) { 
+    //thread_current's pwd has not been set, set as root
+    thread_current()->pwd = dir_open_root();
+  }
+  
   f->success = success; //success = true if loaded
   sema_up(&f->loaded); //notify parent thread of status of load
 
@@ -185,8 +188,11 @@ process_exit (void)
     next = list_remove(e); 
     remove_child(p);
   }
-  if(thread_current()->pwd)
-	dir_close(thread_current()->pwd);
+
+  //added. close the working directory
+  if(thread_current()->pwd){
+    dir_close(thread_current()->pwd);
+  }
 
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
