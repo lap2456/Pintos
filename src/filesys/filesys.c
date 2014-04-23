@@ -75,13 +75,13 @@ filesys_create (const char *name, off_t initial_size, bool isDirectory)
     struct dir * d = dir_open(file_get_inode(f)); 
 
     dir_add(d, ".", inode_sector); 
-    struct inode * parent = dir_get_inode(dir); 
+    struct inode * parent = NULL; 
+    dir_get_parent(dir, &parent); 
     block_sector_t inode_sector_parent = inode_get_inumber(parent); 
 
     dir_add(d, "..", inode_sector_parent); 
     dir_close(d); 
     file_close(f); 
-
   }
   dir_close (dir);
   
@@ -97,7 +97,7 @@ struct file *
 filesys_open (const char *name)
 {
     //if the name has no length then return null
-  if(strlen(name) == 0)
+  /*if(strlen(name) == 0)
 	return NULL;
   char* file_name = get_file_name(name); //grab the filename;
   struct dir *dir = get_this_dir(file_name);
@@ -125,21 +125,34 @@ filesys_open (const char *name)
     }
 	//otherwise lookup the dir
     else
-      dir_lookup (dir, file_name, &inode);
+      dir_lookup (dir, file_name, &inode);*/
+
+
+  char * parse = get_file_name (name); 
+  //get the correct dir
+  struct dir *dir = dir_lookup_rec (parse);
+
+  struct inode *inode = NULL;
+
+  if (dir != NULL)
+    dir_lookup (dir, parse, &inode);
+  dir_close (dir);
+
+  return file_open (inode);
   }
 
 
-  dir_close (dir);
+ /* dir_close (dir);
   free(file_name);
   //if inode is null then return null
   if(!inode)
     return NULL;
     //if the inode is a directory then open the directory and return it as a file
-  if(inode_is_dir(inode))
-    return (struct file *) dir_open(inode);
+ if(inode_is_dir(inode))
+   dir_open(inode);
   
   return file_open (inode);
-}
+}*/ 
 
 /* Deletes the file named NAME.
    Returns true if successful, false on failure.

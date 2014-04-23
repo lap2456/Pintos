@@ -18,7 +18,7 @@
 static void syscall_handler (struct intr_frame *);
 static void copy_in (void *, const void *, size_t);
 static struct lock file_sys_lock;//added
-
+static struct file_descriptor * find_fd(int handle); 
 static int sys_halt (void);
 static int sys_exit (int status);
 static int sys_exec (const char *file);
@@ -45,6 +45,12 @@ struct file_descriptor{
 	struct file *file; 
 	int handle; //file handle
 };
+
+void do_dis(struct file * file){
+  lock_acquire(&file_sys_lock);
+  file_deny_write(file);
+  lock_release(&file_sys_lock);
+}
 void
 syscall_init (void) 
 {
@@ -538,15 +544,8 @@ besides the last, does not already exist.
 That is, mkdir("/a/b/c") succeeds only if
 ‘/a/b’ already exists and ‘/a/b/c’ does not.*/
 static bool sys_mkdir (const char* dir){
-
-  //lock_acquire(&file_sys_lock);
-  if (!verify_pointer(dir)){
-    lock_release(&file_sys_lock);
-    thread_exit();
-  }
-  bool result = filesys_create(dir, 0, true);
-  //lock_release(&file_sys_lock);
-  return result;
+  filesys_create(dir, 0, true); 
+  return true; 
 }
 
 

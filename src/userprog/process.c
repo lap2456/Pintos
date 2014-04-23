@@ -9,6 +9,7 @@
 #include "userprog/gdt.h"
 #include "userprog/pagedir.h"
 #include "userprog/tss.h"
+
 #include "filesys/directory.h"
 #include "filesys/file.h"
 #include "filesys/filesys.h"
@@ -98,6 +99,8 @@ start_process (void *file_name_)
     sema_init(&f->p->dead, 0); 
   }
   
+
+
   //added
   if(thread_current()->pwd==NULL) { 
     //thread_current's pwd has not been set, set as root
@@ -315,8 +318,6 @@ load (const char *file_name, void (**eip) (void), void **esp)
   int i;
   char * saveptr;
   
-  
-
 
   /* Allocate and activate page directory. */
   t->pagedir = pagedir_create (); 
@@ -332,15 +333,15 @@ load (const char *file_name, void (**eip) (void), void **esp)
   /* Open executable file. */
   file = filesys_open(fname); 
   t->file_to_run = file; 
+
   //ASSERT(file!=NULL);
   if (file == NULL) 
     {
       printf ("load: %s: open failed\n", fname);
       goto done; 
-    }
+    } 
 
-  file_deny_write(file); 
-
+  
 
   /* Read and verify executable header. */
   if (file_read (file, &ehdr, sizeof ehdr) != sizeof ehdr

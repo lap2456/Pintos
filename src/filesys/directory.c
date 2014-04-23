@@ -3,8 +3,9 @@
 #include <string.h>
 #include <list.h>
 #include "filesys/filesys.h"
-#include "filesys/inode.h"
+#include "filesys/inode.c"
 #include "threads/malloc.h"
+#include "threads/thread.c"
 
 bool dir_is_empty (struct inode *inode);
 
@@ -134,6 +135,68 @@ dir_lookup (const struct dir *dir, const char *name,
   return *inode != NULL;
 }
 
+//returns the inode of the last dir in name before the last /
+//the user has to check for existing file after the /
+struct dir *
+dir_lookup_rec (const char *name) {
+
+  //printf("lookup path is %s\n",name);
+
+  //if the string starts with / it is an absolut path
+  //root dir
+  if ( strcmp( name, "/") == 0 ) return dir_open_root();
+
+  //for the return value
+  int success = 0;
+  char *token ,*save_ptr;
+  char * temp = (char *)malloc(strlen(name) + 1 );
+  strlcpy (temp, name, strlen(name) + 1); 
+
+  //open root and start 
+  struct dir * current;
+
+  //if it is relative make it absolute 
+  if ( name[0] != '/' ) {
+    current = dir_reopen(thread_current()->pwd);
+  } else {
+    current = dir_open_root();
+  }
+  
+  struct inode * nextdir = dir_get_inode(current);
+
+  //go through and check that the previous direcrtories exist
+  for (token = strtok_r (temp, "/", &save_ptr); 
+    token != NULL; token = strtok_r (NULL, "/", &save_ptr)) {
+
+    //somethings wrong if this hapens 
+    if (current == NULL ) break;
+    //last round has to be not existing
+    if (strlen(save_ptr) == 0) {
+      success = 1;
+      break;
+        
+    }
+
+    //goto next if token is empty in case of //a/
+    if(strlen(token) !=  0) {
+      //check if this directory exists true if exists
+      if ( dir_lookup (current, token,&nextdir) ) {
+        //check if it is a directory and then open it
+
+        //is it a dir
+        if(nextdir->data.isDirectory) {
+          dir_close(current);
+          current = dir_open(nextdir);
+        }
+        else break;
+      }
+      else break;
+    }
+  }
+
+  if( success == 1) return current; else return NULL;
+}
+
 /* Adds a file named NAME to DIR, which must not already contain a
    file by that name.  The file's inode is in sector
    INODE_SECTOR.
@@ -165,8 +228,8 @@ dir_add (struct dir *dir, const char *name, block_sector_t inode_sector)
     goto done;
 
 
-  //if(!inode_add_parent(inode_get_inumber(dir_get_inode(dir)), inode_sector))
-  //  goto done;
+  if(!inode_add_parent(inode_get_inumber(dir_get_inode(dir)), inode_sector))
+    goto done;
 
   /* Set OFS to offset of free slot.
      If there are no free slots, then it will be set to the
