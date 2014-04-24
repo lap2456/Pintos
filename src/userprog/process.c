@@ -9,14 +9,13 @@
 #include "userprog/gdt.h"
 #include "userprog/pagedir.h"
 #include "userprog/tss.h"
-
 #include "filesys/directory.h"
 #include "filesys/file.h"
 #include "filesys/filesys.h"
 #include "threads/flags.h"
 #include "threads/init.h"
 #include "threads/interrupt.h"
-#include "threads/palloc.h"
+#include "threads/palloc.h"/
 #include "threads/thread.h"
 #include "threads/vaddr.h"
 

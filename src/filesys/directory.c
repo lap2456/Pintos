@@ -3,11 +3,12 @@
 #include <string.h>
 #include <list.h>
 #include "filesys/filesys.h"
-#include "filesys/inode.c"
+#include "filesys/inode.h"
 #include "threads/malloc.h"
-#include "threads/thread.c"
+#include "threads/thread.h"
 
 bool dir_is_empty (struct inode *inode);
+char * get_name_only (const char* path);
 
 /* A directory. */
 struct dir 
@@ -126,75 +127,19 @@ dir_lookup (const struct dir *dir, const char *name,
 
   ASSERT (dir != NULL);
   ASSERT (name != NULL);
-  inode_lock(dir_get_inode((struct dir *) dir));
-  if (lookup (dir, name, &e, NULL))
-    *inode = inode_open (e.inode_sector);
-  else
-    *inode = NULL;
-  inode_unlock(dir_get_inode((struct dir *) dir));
-  return *inode != NULL;
-}
-
-//returns the inode of the last dir in name before the last /
-//the user has to check for existing file after the /
-struct dir *
-dir_lookup_rec (const char *name) {
-
-  //printf("lookup path is %s\n",name);
-
-  //if the string starts with / it is an absolut path
-  //root dir
-  if ( strcmp( name, "/") == 0 ) return dir_open_root();
-
-  //for the return value
-  int success = 0;
-  char *token ,*save_ptr;
-  char * temp = (char *)malloc(strlen(name) + 1 );
-  strlcpy (temp, name, strlen(name) + 1); 
-
-  //open root and start 
-  struct dir * current;
-
-  //if it is relative make it absolute 
-  if ( name[0] != '/' ) {
-    current = dir_reopen(thread_current()->pwd);
-  } else {
-    current = dir_open_root();
-  }
   
-  struct inode * nextdir = dir_get_inode(current);
-
-  //go through and check that the previous direcrtories exist
-  for (token = strtok_r (temp, "/", &save_ptr); 
-    token != NULL; token = strtok_r (NULL, "/", &save_ptr)) {
-
-    //somethings wrong if this hapens 
-    if (current == NULL ) break;
-    //last round has to be not existing
-    if (strlen(save_ptr) == 0) {
-      success = 1;
-      break;
-        
-    }
-
-    //goto next if token is empty in case of //a/
-    if(strlen(token) !=  0) {
-      //check if this directory exists true if exists
-      if ( dir_lookup (current, token,&nextdir) ) {
-        //check if it is a directory and then open it
-
-        //is it a dir
-        if(nextdir->data.isDirectory) {
-          dir_close(current);
-          current = dir_open(nextdir);
-        }
-        else break;
-      }
-      else break;
-    }
+  if(strcmp(name, "/") == 0 && inode_get_inumber(dir_get_inode(dir)) == ROOT_DIR_SECTOR)
+      *inode = inode_reopen(dir_get_inode(dir));
+  else{
+    inode_lock(dir_get_inode((struct dir *) dir));
+    name = get_name_only(name);
+    if (lookup (dir, name, &e, NULL))
+      *inode = inode_open (e.inode_sector);
+    else
+      *inode = NULL;
+    inode_unlock(dir_get_inode((struct dir *) dir));
   }
-
-  if( success == 1) return current; else return NULL;
+  return *inode != NULL;
 }
 
 /* Adds a file named NAME to DIR, which must not already contain a
@@ -210,26 +155,27 @@ dir_add (struct dir *dir, const char *name, block_sector_t inode_sector)
   off_t ofs;
   bool success = false;
 
+  name = get_name_only(name);
+
   ASSERT (dir != NULL);
   ASSERT (name != NULL);
-
-  name = get_file_name(name);
   
     /* Check NAME for validity. */
-  if (name == '\0' || strlen (name) > NAME_MAX)
+  if (name == '\0' || strlen (name) > NAME_MAX){
+    //printf("invalid name\n");
     return false; 
+  }
 
   inode_lock(dir_get_inode(dir));
 
-
-
   /* Check that NAME is not in use. */
-  if (lookup (dir, name, NULL, NULL))
+  if (lookup (dir, name, NULL, NULL)){
+    //printf("name already in use\n");
     goto done;
+  }
 
-
-  if(!inode_add_parent(inode_get_inumber(dir_get_inode(dir)), inode_sector))
-    goto done;
+  //if(!inode_add_parent(inode_get_inumber(dir_get_inode(dir)), inode_sector))
+    //goto done;
 
   /* Set OFS to offset of free slot.
      If there are no free slots, then it will be set to the
@@ -248,6 +194,7 @@ dir_add (struct dir *dir, const char *name, block_sector_t inode_sector)
   strlcpy (e.name, name, sizeof e.name);
   e.inode_sector = inode_sector;
   success = inode_write_at (dir->inode, &e, sizeof e, ofs) == sizeof e;
+  //printf("success after write at is :%d\n", success);
 
  done:
   inode_unlock(dir_get_inode(dir));
@@ -269,6 +216,7 @@ dir_remove (struct dir *dir, const char *name)
   ASSERT (name != NULL);
 
   inode_lock(dir_get_inode(dir));
+  name = get_name_only(name);
   /* Find directory entry. */
   if (!lookup (dir, name, &e, &ofs))
     goto done;
@@ -278,12 +226,19 @@ dir_remove (struct dir *dir, const char *name)
   if (inode == NULL)
     goto done;
 
-  if(inode_is_dir(inode) && inode_return_open_cnt(inode) > 1)
-    goto done;
-
-  //Directory we are deleting is not empty
-  if(inode_is_dir(inode) && !dir_is_empty(inode))
-    goto done;
+  if(inode_is_dir(inode)){
+    if(inode_return_open_cnt(inode) > 1)
+        goto done;
+    char *temp_name = (char*)malloc(sizeof(char) * (NAME_MAX + 1));
+    struct dir *temp_dir = dir_open(inode);
+    if(dir_readdir(temp_dir, temp_name)){
+      free(temp_name);
+      dir_close(temp_dir);
+      goto done;
+    }
+    free(temp_name);
+    dir_close(temp_dir);
+  }
 
   /* Erase directory entry. */
   e.in_use = false;
@@ -295,8 +250,8 @@ dir_remove (struct dir *dir, const char *name)
   success = true;
 
  done:
-  inode_close (inode);
   inode_unlock(dir_get_inode(dir));
+  inode_close (inode);
   return success;
 }
 
@@ -315,7 +270,7 @@ dir_readdir (struct dir *dir, char name[NAME_MAX + 1])
         {
           strlcpy (name, e.name, NAME_MAX + 1);
           inode_unlock(dir_get_inode(dir));
-	  return true;
+          return true;
         } 
     }
   inode_unlock(dir_get_inode(dir));
@@ -350,4 +305,21 @@ bool dir_get_parent (struct dir* dir, struct inode **inode)
     block_sector_t sector = inode_return_parent(dir_get_inode(dir));
     *inode = inode_open (sector);
     return *inode != NULL;
+}
+
+char * get_name_only (const char* path)
+{
+  char *parse = (char *) malloc(strlen(path) + 1);
+  strlcpy (parse, path, strlen(path) + 1);
+  //if we have no file name and just a slash
+  if(strcmp(parse, "/") == 0)
+      //then return that slash
+      return parse;
+  char *token, *save_ptr;
+  //parse through the path until you reach the last token to grab which is the file name
+  for(token = strtok_r (parse, "/", &save_ptr); token != NULL; token = strtok_r (NULL, "/", &save_ptr)){
+    if(strlen(save_ptr) == 0)
+        break;
+  }
+  return token;
 }

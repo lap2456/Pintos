@@ -61,11 +61,20 @@ filesys_create (const char *name, off_t initial_size, bool isDirectory)
 
   bool success = false;
  
+ 
 	success = (dir != NULL
     && free_map_allocate (1, &inode_sector)
     && inode_create (inode_sector, initial_size, isDirectory)
     && dir_add (dir, file_name, inode_sector));
   
+  
+ /*
+  ASSERT(dir != NULL);
+  ASSERT(free_map_allocate(1, &inode_sector));
+  ASSERT(inode_create (inode_sector, initial_size, isDirectory));
+  ASSERT(dir_add(dir, file_name, inode_sector));
+  success = true;
+*/
   if (!success && inode_sector != 0) 
     free_map_release (inode_sector, 1);
 
@@ -96,41 +105,10 @@ filesys_create (const char *name, off_t initial_size, bool isDirectory)
 struct file *
 filesys_open (const char *name)
 {
-    //if the name has no length then return null
-  /*if(strlen(name) == 0)
-	return NULL;
-  char* file_name = get_file_name(name); //grab the filename;
-  struct dir *dir = get_this_dir(file_name);
-  
-  struct inode *inode = NULL;
-
-
-  if (dir != NULL)
-  {
-    //if the filename is ".."
-    if(strcmp(file_name, "..") == 0) {
-	    //and the inode has no parent then free up and return null
-	    if(dir_get_parent(dir, &inode) == NULL) {
-        free(file_name);
-        return NULL;
-	    }
-    }
-	//if the dir is a root dir and the length of the name is 0
-	//or if the filename is "."
-    else if((is_root_dir(dir) && strlen(file_name) == 0)||
-      strcmp(file_name, ".") == 0){
-	    //then free filename and return the dir as a file
-	    free(file_name);
-	    return (struct file *) dir;
-    }
-	//otherwise lookup the dir
-    else
-      dir_lookup (dir, file_name, &inode);*/
-
-
   char * parse = get_file_name (name); 
   //get the correct dir
-  struct dir *dir = dir_lookup_rec (parse);
+  struct thread *curr = thread_current();
+  struct dir *dir = get_this_dir (parse);
 
   struct inode *inode = NULL;
 
@@ -139,20 +117,7 @@ filesys_open (const char *name)
   dir_close (dir);
 
   return file_open (inode);
-  }
-
-
- /* dir_close (dir);
-  free(file_name);
-  //if inode is null then return null
-  if(!inode)
-    return NULL;
-    //if the inode is a directory then open the directory and return it as a file
- if(inode_is_dir(inode))
-   dir_open(inode);
-  
-  return file_open (inode);
-}*/ 
+}
 
 /* Deletes the file named NAME.
    Returns true if successful, false on failure.
@@ -161,8 +126,8 @@ filesys_open (const char *name)
 bool
 filesys_remove (const char *name) 
 {
-  struct dir *dir = get_this_dir (name);
   char* file_name = get_file_name(name);
+  struct dir *dir = get_this_dir (name);
   bool success = dir != NULL && dir_remove (dir, file_name);
   dir_close (dir); 
   free(file_name);
@@ -236,104 +201,59 @@ do_format (void)
   printf ("done.\n");
 }
 
-struct dir* get_this_dir (const char* name)
+struct dir* get_this_dir (const char* file_name)
 {
-  /*char string[strlen(name) + 1];
-  memcpy(string, name, strlen(name) + 1);
-  char *save_ptr, *next_token = NULL;
-  char *token = strtok_r(string, "/", &save_ptr);
-  struct dir* dir;
-  struct thread *cur = thread_current();
-  if(string[0] == ASCII_SLASH || !thread_current()->pwd)	
-	dir = dir_open_root();
-  else
-	dir = dir_reopen(thread_current()->pwd);
-  if(token)
-	next_token = strtok_r (NULL, "/", &save_ptr);
-  while (next_token != NULL)
-  {
-	if(strcmp(token, ".") != 0)
-	{
-	    struct inode *inode;
-	    if(strcmp(token, "..") == 0)
-	    {
-		if(!dir_get_parent(dir, &inode)){
-		    return NULL;
-		}
-	    }
-	    else
-	    {
-		if(!dir_lookup(dir, token, &inode)){
-		    return NULL;
-		}
-	    }
-	    if (inode_is_dir(inode))
-	    {
-		dir_close(dir);
-		dir = dir_open(inode);
-	    }
-	    else
-	       	inode_close(inode);
-	}
-	token = next_token;
-	next_token = strtok_r(NULL, "/", &save_ptr);
-  }
-  return dir;*/
-
-  //printf("lookup path is %s\n",name);
-
-  //if the string starts with / it is an absolute path
-  //root dir
-  if (strcmp(name, "/") == 0) 
+  //printf("lookup path is %s\n", file_name);
+  //return root dir
+  if (strcmp(file_name, "/") == 0) 
     return dir_open_root();
 
-  //for the return value
   int success = 0;
   char *token ,*save_ptr;
-  char * temp = (char *)malloc(strlen(name) + 1 );
-  strlcpy (temp, name, strlen(name) + 1); 
+  char * temp = (char *)malloc(strlen(file_name) + 1 );
+  strlcpy (temp, file_name, strlen(file_name) + 1); 
 
-  //open root and start 
-  struct dir * current;
-
-  //if it is relative make it absolute 
-  if ( name[0] != '/' ) {
-    current = dir_reopen(thread_current()->pwd);
+  //open root and begin and check to see if it is relative
+  struct dir * curr_dir; 
+  if ( file_name[0] != '/' ) {
+    //if it is then make it absolute
+    curr_dir = dir_reopen(thread_current()->pwd);
   } else {
-    current = dir_open_root();
+    //otherwise open root dir
+    curr_dir = dir_open_root();
   }
   
-  struct inode * nextdir = dir_get_inode(current);
-
-  //go through and check that the previous direcrtories exist
+  //parse through directories on file_name and check to make sure they exist
+  struct inode * nextdir = dir_get_inode(curr_dir);
   for (token = strtok_r (temp, "/", &save_ptr); 
-    token != NULL; token = strtok_r (NULL, "/", &save_ptr)) {
-    //somethings wrong if this happens 
-    if (current == NULL ) 
-      break;
-    //last round has to be not existing
-    if (strlen(save_ptr) == 0) {
-      success = 1;
-      break; 
-    }
+    token != NULL; token = strtok_r (NULL, "/", &save_ptr))
+  {
+      //this should not happen 
+      if (curr_dir == NULL ) 
+        break;
+      //last part of file_name should not exist since that is what we are making
+      if (strlen(save_ptr) == 0) {
+        success = 1;
+        break; 
+      }
 
-    //goto next if token is empty in case of //a/
-    if(strlen(token) !=  0) {
       //check if this directory exists true if exists
-      if ( dir_lookup (current, token,&nextdir) ) {
-        //check if it is a directory and then open it
+      if (dir_lookup (curr_dir, token, &nextdir)) {
+        //if it is a directory
         if(inode_is_dir(nextdir)) {
-          dir_close(current);
-          current = dir_open(nextdir);
+          //then open it
+          dir_close(curr_dir);
+          curr_dir = dir_open(nextdir);
         }
+        //otherwise an error has occurred and should break
         else break;
       }
+      //if directory does not exist then an error has occured
       else break;
-    }
   }
 
   if(success) 
-    return current; 
+    return curr_dir; 
   else 
     return NULL;
 }
@@ -342,9 +262,9 @@ char* get_file_name (const char* name)
 {
   char *file_name = (char *) malloc(strlen(name) + 1); 
   char *token, *save_ptr; 
-  char * parse = (char*)malloc(strlen(name)+1); 
+  char * temp = (char*)malloc(strlen(name)+1); 
 
-  strlcpy(parse, name, strlen(name)+1 ); 
+  strlcpy(temp, name, strlen(name)+1 ); 
 
   //if the string starts with '/' it is an absolute path
   if(name[0]=='/'){
@@ -356,13 +276,12 @@ char* get_file_name (const char* name)
 
   //parse the original name to remove multiple slashes
   //parse the original name to remove multiple //
-  for (token = strtok_r (parse, "/", &save_ptr); token != NULL; 
+  for (token = strtok_r (temp, "/", &save_ptr); token != NULL; 
     token = strtok_r (NULL, "/", &save_ptr)) {
     if(strlen(token) != 0) {
-    memcpy(file_name + strlen(file_name),token,strlen(token)+1);
-    memcpy(file_name + strlen(file_name),"/\0",2);
-  }   
-
+      memcpy(file_name + strlen(file_name), token, strlen(token)+1);
+      memcpy(file_name + strlen(file_name), "/\0", 2);
+    }   
   }
 
   //if last one is / remove it

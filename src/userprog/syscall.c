@@ -544,8 +544,14 @@ besides the last, does not already exist.
 That is, mkdir("/a/b/c") succeeds only if
 ‘/a/b’ already exists and ‘/a/b/c’ does not.*/
 static bool sys_mkdir (const char* dir){
-  filesys_create(dir, 0, true); 
-  return true; 
+  lock_acquire(&file_sys_lock);
+  if(!verify_pointer(dir)){
+      lock_release(&file_sys_lock);
+      thread_exit();
+  }
+  bool result = filesys_create(dir, 0, true);
+  lock_release(&file_sys_lock);
+  return result;
 }
 
 
