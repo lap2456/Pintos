@@ -92,6 +92,7 @@ main (void)
   thread_init ();
   console_init ();  
 
+
   /* Greet user. */
   printf ("Pintos booting with %'"PRIu32" kB RAM...\n",
           init_ram_pages * PGSIZE / 1024);

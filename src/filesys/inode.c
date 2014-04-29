@@ -1,40 +1,16 @@
 #include "filesys/inode.h"
-#include <list.h>
-#include <debug.h>
-#include <round.h>
-#include <string.h>
-#include "filesys/filesys.h"
-#include "filesys/free-map.h"
-#include "threads/malloc.h"
-#include "threads/synch.h"
+
 
 
 /* Identifies an inode. */
 #define INODE_MAGIC 0x494e4f44
 
 #define MAX_FSIZE 8322048 //added - max amount of actual data 
-#define DIRECT_BLOCKS 10 //added 
-#define INDIRECT_BLOCKS 128 //added 
-#define DOUBLY_INDIRECT_BLOCKS 128 //added
+
 #define MIN(X, Y) ((X) < (Y) ? (X) : (Y))
 
 
-/*Added. Each indirect block is an array of INDIRECT_BLOCKS direct blocks. 
-Struct also contains number of data blocks used */
-struct indirect_block{
-    block_sector_t blocks[INDIRECT_BLOCKS];
-};
 
-/* On-disk inode.
-   Must be exactly BLOCK_SECTOR_SIZE bytes long. */
-struct inode_disk{
-    off_t length;                       /* File size in bytes. */
-    unsigned magic;                     /* Magic number. */
-    bool isDirectory;			//for subdirectories
-    block_sector_t parent_inode;	
-    block_sector_t doubly_indirect; /*added. block where doubly indirect struct is stored*/
-    uint32_t unused[123];
-};
 
 /* Returns the number of sectors to allocate for an inode SIZE
    bytes long. */
@@ -44,18 +20,7 @@ bytes_to_sectors (off_t size)
     return DIV_ROUND_UP (size, BLOCK_SECTOR_SIZE);
 }
 
-/* In-memory inode. */
-struct inode 
-{
-    struct list_elem elem;              /* Element in inode list. */
-    block_sector_t sector;              /* Sector number of disk location. Gives the information 							needed to find inode on disk  */
-    int open_cnt;                       /* Number of openers. */
-    bool removed;                       /* True if deleted, false otherwise. */
-    int deny_write_cnt;                 /* 0: writes ok, >0: deny writes. */
-    struct inode_disk data;             /* Inode content. */
-    struct lock inode_lock;		//for when we need to use synchronizations
-    off_t total_length;                 	/*added.used for read race condition after EOF*/
-};
+
 
 /*Added. Returns the block within INODE that corresponds to the 
 byte offset POS.*/
@@ -80,10 +45,13 @@ block_sector_t byte_to_inode_block(struct inode *inode, off_t pos, bool read){
   }
 }
 
-bool allocate_indirect(block_sector_t *ind, int index, size_t sectors){
+/*An indirect block can contain up to 128 points to direct data blocks, each of which
+are BLOCK_SECTOR_SIZE big. 
+DIRECTS should be how many data block sectors we want to allocate.*/
+bool allocate_indirect(block_sector_t *ind, int index, size_t directs){
     int i = index;
-    int count = sectors;
-    printf("allocating new indirect. sectors = %d \n", sectors);
+    int count = directs;
+    //printf("allocating new indirect. sectors = %d \n", sectors);
     static char zeros[BLOCK_SECTOR_SIZE];
     while(count>0){
         if(free_map_allocate(1, &ind[i])){
@@ -91,53 +59,9 @@ bool allocate_indirect(block_sector_t *ind, int index, size_t sectors){
             i++;
         }
         else
-            return 0;
+            return false;
         count-=1;
     }
-    return 1;
-}
-
-bool extend(struct inode *inode){ 
-    ASSERT(inode != NULL); 
-    size_t old_sectors = bytes_to_sectors(inode->data.length); 
-    size_t indirects_to_add = 0;
-    if(old_sectors % 128 == 0)
-     	indirects_to_add = 1;
-    size_t indirect_index = (old_sectors+1)/128;
-    block_sector_t indirect_block[128];
-    block_sector_t dbl_block[128];
-    block_read(fs_device, inode->data.doubly_indirect, &dbl_block);
-    static char zeros[BLOCK_SECTOR_SIZE];
-    //if you have to fill a partially filled indirect block
-    if(indirects_to_add == 0) {   
-	block_read(fs_device, dbl_block[indirect_index], &indirect_block);
-    	size_t index = old_sectors%128;
- 	if(free_map_allocate(1, &indirect_block[index]))
-	    block_write(fs_device, indirect_block[index], zeros);
-	else
-	    return false;
-    }
-    //if you have to create a new indirect block
-    else{
-	if(free_map_allocate(1, &dbl_block[indirect_index])){
-	    block_write(fs_device, dbl_block[indirect_index], zeros);
-	    block_read(fs_device, dbl_block[indirect_index], &indirect_block);
-	    if(free_map_allocate(1, &indirect_block[0]))
-		block_write(fs_device, indirect_block[0], zeros);
-	    else
-		return false;
-	}
-	else
-	    return false;
-    }
-    block_write(fs_device, dbl_block[indirect_index], &indirect_block);
-    
-    //write back the double indirect block IFF new indirects were added to it
-    if(indirects_to_add)
-	block_write(fs_device, inode->data.doubly_indirect, &dbl_block);
-    
-    inode->data.length = inode->data.length+1;
-    block_write(fs_device, inode->sector, &inode->data);
     return true; 
 }
 
@@ -160,11 +84,12 @@ inode_init (void)
 bool
 inode_create (block_sector_t sector, off_t length, bool isDirectory)
 {
+
     struct inode_disk *disk_inode = NULL;
 
     ASSERT (length >= 0);
     if(length > MAX_FSIZE){
-      printf("length over max size\n");
+      //printf("length over max size\n");
       return false;
     }
 
@@ -229,7 +154,7 @@ inode_create (block_sector_t sector, off_t length, bool isDirectory)
       //printf("inode create worked\n");
       return true;
     }
-    printf("disk inode null\n");
+    //printf("disk inode null\n");
     return false;
 }
 
@@ -266,6 +191,7 @@ inode_open (block_sector_t sector)
     inode->open_cnt = 1;
     inode->deny_write_cnt = 0;
     inode->removed = false;
+
     block_read (fs_device, inode->sector, &inode->data);
     lock_init(&inode->inode_lock);
     ASSERT(inode!=NULL);
@@ -384,23 +310,130 @@ into caller's buffer. */
   return bytes_read;
 }
 
+/*Length is the total length of the file after write. It is 
+equal to offset (point to start writing) + size of write.*/
+bool file_extend(struct inode *inode, off_t length){
+ // printf("Extending file... \n"); 
+  bool perfect = false; 
+  size_t added = 0; //number of sectors we've added 
+  off_t old_sectors = inode->total_length; //how many sectors we used to fill up
+  size_t indirects_to_add = 0; //how many indirect blocks we need to add 
+  if(old_sectors % INDIRECT_BLOCKS == 0) { //if we used to perfectly fill up a certain amount of ind. blocks 
+    indirects_to_add += 1; //we need to start a new indirect block
+    perfect = true;  
+  }
+  off_t new_sectors = bytes_to_sectors(length); 
+
+
+  //get the number of blocks in the file
+  off_t add_sectors = new_sectors - old_sectors; //how many additional sectors we need to add
+
+  if(add_sectors == 0) return true; 
+  
+  bool success = false; 
+
+  struct indirect_block* temp; 
+  temp = malloc(sizeof(*temp)); 
+  block_sector_t * dbl_block;
+  dbl_block = malloc(128 * sizeof(block_sector_t));  
+  block_read(fs_device, inode->data.doubly_indirect, dbl_block);
+  static char zeros[BLOCK_SECTOR_SIZE];
+  
+
+  size_t indirect_index = old_sectors/(INDIRECT_BLOCKS*BLOCK_SECTOR_SIZE); //how many indirects we have filled or partially filled up
+  size_t dir_index = old_sectors%INDIRECT_BLOCKS; //how many data sectors this indirect block has filled up
+  size_t add_directs = 0;
+  //if you have a partially filled indirect block and need to fill it up
+  if(!perfect) {   
+    //read that indirect block (disk) into temp ind. block struct
+    block_read(fs_device, dbl_block[indirect_index], temp);
+    
+
+    size_t left = INDIRECT_BLOCKS - dir_index; //how many sectors are left in this indirect block
+
+    add_directs = MIN(left, add_sectors); 
+    allocate_indirect(temp->blocks, dir_index, add_directs); 
+    indirect_index+=1; 
+    add_sectors -= add_directs; //how many sectors do we still need to add?
+    added += add_directs; 
+  }
+  
+  //are we done adding stuff?
+  if(add_sectors ==0)
+    return true; 
+
+  //each indirect block can hold 128 data sectors 
+  indirects_to_add += add_sectors/INDIRECT_BLOCKS; //total number of indirects we need to add
+
+
+
+  /* allocate all of the indirect blocks that will be needed
+  if it fails then free up the structs made and return false */
+
+
+  block_write(fs_device, inode->data.doubly_indirect, dbl_block);
+  
+  //if(!allocate_indirect(dbl_block, indirect_index, indirects_to_add)){
+  //  printf("failed adding indirect blocks in extend\n");
+  //  return false;
+  //}
+  /*Now go allocate sectors for each indirect block*/
+  while(add_sectors > 0) {
+    block_read(fs_device, dbl_block[indirect_index], temp);
+    add_directs = MIN(INDIRECT_BLOCKS, add_sectors); 
+    allocate_indirect(temp->blocks, 0, add_directs); 
+    indirect_index+=1; 
+    add_sectors -= add_directs; 
+    added += add_directs; 
+    block_write(fs_device, dbl_block[indirect_index], temp); 
+  }
+    
+  //write back the double indirect block IFF new indirects were added to it
+  if(indirects_to_add>0){
+    block_write(fs_device, inode->data.doubly_indirect, &dbl_block);
+  }
+
+  block_write(fs_device, inode->sector, &inode->data); //write to inode disk data
+  return true; 
+}
 
 /* Writes SIZE bytes from BUFFER into INODE, starting at OFFSET.
    Returns the number of bytes actually written, which may be
    less than SIZE if end of file is reached or an error occurs.
-   (Normally a write at end of file would extend the inode, but
-   growth is not yet implemented.) */
+   File growth is implemented */
 off_t
 inode_write_at (struct inode *inode, const void *buffer_, off_t size,
                 off_t offset) 
 {
-  printf("byte offset we are writing at is %d, we are writing %d bytes and the length is %d\n", offset, size, inode_length(inode));
+  //added for debugging 
+  //printf("byte offset we are writing at is %d, we are writing %d bytes and the length is %d\n", offset, size, inode_length(inode));
   const uint8_t *buffer = buffer_;
   off_t bytes_written = 0;
   uint8_t *bounce = NULL;
+  bool got_lock = false; 
+
   if (inode->deny_write_cnt){
-    	printf("write count is too high!!!\n");
+      //added print for debugigng 
+    	//printf("write count is too high!!!\n");
       return 0;
+  }
+
+
+  //check if it is necessary to extend the file
+  off_t old = bytes_to_sectors(inode->data.length);
+  //printf("File size in bytes: %d \n", inode->data.length);
+  if((offset+size)/BLOCK_SECTOR_SIZE > old){
+    //acquire the lock 
+    if(!inode->data.isDirectory){
+      lock_acquire(&inode->inode_lock); 
+      got_lock = true; 
+    }
+    //printf("Extending File"); 
+    if(!file_extend(inode, offset+size)){
+      //printf("error extending file"); 
+      return 0; 
+      inode->data.length = offset+size; //EOF has been moved 
+    }  
   }
 
   while (size > 0) 
@@ -418,15 +451,7 @@ inode_write_at (struct inode *inode, const void *buffer_, off_t size,
     int chunk_size = MIN(size, min_left);
     if (chunk_size <= 0)
       break;
-	  if(min_left == 0){
-	    if(!inode->data.isDirectory)
-	    inode_lock(inode);
-	    //once you have the lock do the check again in case someone else already extended while you were waiting on the lock
-	    if(inode_length(inode) - offset == 0)
-		  extend(inode);
-	    if(!inode->data.isDirectory)	
-        inode_unlock(inode);
-    }
+
     else if (sector_ofs == 0 && chunk_size == BLOCK_SECTOR_SIZE)
     {
       /* Write full sector directly to disk. */
@@ -457,6 +482,13 @@ inode_write_at (struct inode *inode, const void *buffer_, off_t size,
     offset += chunk_size;
     bytes_written += chunk_size;
   }
+
+  //inode->data.length += bytes_written; 
+  //if we got lock, release
+  if(got_lock){
+    lock_release(&inode->inode_lock);
+  }
+
   free (bounce);
   return bytes_written;
 }
@@ -541,12 +573,4 @@ bool inode_is_dir (const struct inode *inode)
   return inode->data.isDirectory;
 }
 
-void inode_lock (const struct inode *inode)
-{
-  lock_acquire(&((struct inode *)inode)->inode_lock);
-}
 
-void inode_unlock (const struct inode *inode)
-{
-  lock_release(&((struct inode *) inode)->inode_lock);
-}

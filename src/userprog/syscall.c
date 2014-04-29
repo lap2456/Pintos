@@ -46,11 +46,6 @@ struct file_descriptor{
 	int handle; //file handle
 };
 
-void do_dis(struct file * file){
-  lock_acquire(&file_sys_lock);
-  file_deny_write(file);
-  lock_release(&file_sys_lock);
-}
 void
 syscall_init (void) 
 {
@@ -545,10 +540,11 @@ That is, mkdir("/a/b/c") succeeds only if
 ‘/a/b’ already exists and ‘/a/b/c’ does not.*/
 static bool sys_mkdir (const char* dir){
   lock_acquire(&file_sys_lock);
-  if(!verify_pointer(dir)){
-      lock_release(&file_sys_lock);
-      thread_exit();
+  if(strlen(dir) == 0 || strcmp(dir, "/") ==0){
+    lock_release(&file_sys_lock); 
+    return false; 
   }
+  printf("Making file"); 
   bool result = filesys_create(dir, 0, true);
   lock_release(&file_sys_lock);
   return result;
@@ -579,7 +575,8 @@ static bool sys_readdir (int handle, char* name){
   return true;
 }
 
-/*Returns true if fd represents a directory, false if it represents an ordinary file.*/
+/*Returns true if fd represents a directory, 
+false if it represents an ordinary file.*/
 static bool sys_isdir (int handle){
   struct file_descriptor *fd;
   fd = find_fd(handle);

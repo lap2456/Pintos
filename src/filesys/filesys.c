@@ -84,8 +84,7 @@ filesys_create (const char *name, off_t initial_size, bool isDirectory)
     struct dir * d = dir_open(file_get_inode(f)); 
 
     dir_add(d, ".", inode_sector); 
-    struct inode * parent = NULL; 
-    dir_get_parent(dir, &parent); 
+    struct inode * parent = dir_get_inode(d);  
     block_sector_t inode_sector_parent = inode_get_inumber(parent); 
 
     dir_add(d, "..", inode_sector_parent); 
@@ -237,6 +236,7 @@ struct dir* get_this_dir (const char* file_name)
         break; 
       }
 
+      if(strlen(token) != 0) { 
       //check if this directory exists true if exists
       if (dir_lookup (curr_dir, token, &nextdir)) {
         //if it is a directory
@@ -250,6 +250,7 @@ struct dir* get_this_dir (const char* file_name)
       }
       //if directory does not exist then an error has occured
       else break;
+    }
   }
 
   if(success) 

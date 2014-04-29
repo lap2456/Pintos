@@ -1,11 +1,55 @@
 #ifndef FILESYS_INODE_H
 #define FILESYS_INODE_H
-
+#include "filesys/filesys.h"
+#include "filesys/free-map.h"
 #include <stdbool.h>
 #include "filesys/off_t.h"
 #include "devices/block.h"
+#include "threads/synch.h"
+#include <list.h>
+#include <debug.h>
+#include <round.h>
+#include <string.h>
+
+#include "threads/malloc.h"
+
+#define DIRECT_BLOCKS 10 //added 
+#define INDIRECT_BLOCKS 128 //added 
+#define DOUBLY_INDIRECT_BLOCKS 128 //added
 
 struct bitmap;
+
+
+/* On-disk inode.
+   Must be exactly BLOCK_SECTOR_SIZE bytes long. */
+struct inode_disk{
+    off_t length;                       /* File size in bytes. */
+    unsigned magic;                     /* Magic number. */
+    bool isDirectory;           //for subdirectories
+    block_sector_t parent_inode;    
+    block_sector_t doubly_indirect; /*added. block where doubly indirect struct is stored*/
+    uint32_t unused[123];
+};
+
+/* In-memory inode. */
+struct inode 
+{
+    struct list_elem elem;              /* Element in inode list. */
+    block_sector_t sector;              /* Sector number of disk location. Gives the information 							needed to find inode on disk  */
+    int open_cnt;                       /* Number of openers. */
+    bool removed;                       /* True if deleted, false otherwise. */
+    int deny_write_cnt;                 /* 0: writes ok, >0: deny writes. */
+    struct inode_disk data;             /* Inode content. */
+    struct lock inode_lock;		//for when we need to use synchronizations
+    off_t total_length;                 	/*added.used for read race condition after EOF*/
+}; 
+
+/*Added. Each indirect block is an array of INDIRECT_BLOCKS direct blocks. 
+Struct also contains number of data blocks used */
+struct indirect_block{
+    block_sector_t blocks[INDIRECT_BLOCKS];
+};
+
 
 static inline size_t bytes_to_sectors (off_t size);
 void inode_init (void);

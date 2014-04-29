@@ -333,6 +333,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
   file = filesys_open(fname); 
   t->file_to_run = file; 
 
+ 
   //ASSERT(file!=NULL);
   if (file == NULL) 
     {
@@ -341,7 +342,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
     } 
 
   
-
+  file_deny_write(file);
   /* Read and verify executable header. */
   if (file_read (file, &ehdr, sizeof ehdr) != sizeof ehdr
       || memcmp (ehdr.e_ident, "\177ELF\1\1\1", 7)
