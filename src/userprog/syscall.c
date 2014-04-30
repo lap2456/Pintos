@@ -107,7 +107,7 @@ syscall_handler (struct intr_frame *f)
       result = sys_chdir(args[0]);
       break;
     case SYS_MKDIR:
-      result = sys_mkdir(args[0]);
+      result = sys_mkdir((const char *)args[0]);
       break;
     case SYS_READDIR:
       result = sys_readdir(args[0], args[1]);
@@ -327,11 +327,11 @@ static int sys_open (const char *file){
 			if(fd->file != NULL){
 				struct thread *t = thread_current(); 
 				handle = fd->handle = t->next_handle++; 
-				list_push_front(&t->fds, &fd->elem); 
+				list_push_front(t->fds, &fd->elem); 
 			} else free(fd); 
 
 		lock_release (&file_sys_lock);
-	}
+	 }
 		palloc_free_page(kfile); 
 		return handle; 
 	} else {
@@ -341,7 +341,7 @@ static int sys_open (const char *file){
 
 static struct file_descriptor * find_fd(int handle){
 	struct list_elem *e; 
-	struct list *s = &(thread_current()->fds); 
+	struct list *s = thread_current()->fds; 
 	struct file_descriptor *fd; 
 	for(e = list_begin(s); e != list_end(s); e = list_next(e)) {
     	fd = list_entry(e, struct file_descriptor,elem);
@@ -498,18 +498,32 @@ void
 syscall_exit (void)
 {
   struct thread *cur = thread_current();
-  struct list *s = &(cur->fds);
+
   struct list_elem *e, *next;
 
   lock_acquire(&file_sys_lock);
 
-  for(e = list_begin(s);e != list_end(s); e = next)
-  {
-    struct file_descriptor* fd = list_entry(e, struct file_descriptor, elem);
-    file_close(fd->file); //file_close also allows writes 
-    next = list_remove(e);
-    free(fd);
-  }
+  struct file_descriptor *fd; 
+  struct file *f; 
+  if(thread_current()->fds!= NULL){
+    for(e = list_begin(thread_current()->fds);e != list_end(thread_current()->fds); e = list_next(e))
+    {
+      fd = list_entry(e, struct file_descriptor, elem);
+
+      //added 
+      f = fd->file; 
+      struct inode * in = f->inode;
+      //if(inode_is_dir(in)){
+        //struct dir * d = dir_open(file_get_inode(f)); 
+        //free(d); 
+      //}
+      e = list_remove(&fd->elem)->prev;
+      file_close(fd->file); //file_close also allows writes 
+      free(fd);
+    }
+  } 
+
+  dir_close(thread_current()->pwd); //close working directory 
 
   lock_release(&file_sys_lock);
   return;
@@ -544,7 +558,7 @@ static bool sys_mkdir (const char* dir){
     lock_release(&file_sys_lock); 
     return false; 
   }
-  printf("Making file"); 
+  //printf("Making file"); 
   bool result = filesys_create(dir, 0, true);
   lock_release(&file_sys_lock);
   return result;

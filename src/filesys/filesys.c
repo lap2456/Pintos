@@ -59,8 +59,12 @@ filesys_create (const char *name, off_t initial_size, bool isDirectory)
   char* file_name = get_file_name(name);
   struct dir *dir = get_this_dir(file_name);
 
+  if(strlen(file_name)==0 || strlen(file_name) >NAME_MAX){
+    return false; 
+  }
+
   bool success = false;
- 
+  //ASSERT(dir!=NULL);
  
 	success = (dir != NULL
     && free_map_allocate (1, &inode_sector)
@@ -68,13 +72,13 @@ filesys_create (const char *name, off_t initial_size, bool isDirectory)
     && dir_add (dir, file_name, inode_sector));
   
   
- /*
-  ASSERT(dir != NULL);
-  ASSERT(free_map_allocate(1, &inode_sector));
-  ASSERT(inode_create (inode_sector, initial_size, isDirectory));
-  ASSERT(dir_add(dir, file_name, inode_sector));
+ 
+  //ASSERT(dir != NULL);
+  //ASSERT(free_map_allocate(1, &inode_sector));
+  //ASSERT(inode_create (inode_sector, initial_size, isDirectory));
+  //ASSERT(dir_add(dir, file_name, inode_sector)!=NULL);
   success = true;
-*/
+
   if (!success && inode_sector != 0) 
     free_map_release (inode_sector, 1);
 
@@ -106,10 +110,11 @@ filesys_open (const char *name)
 {
   char * parse = get_file_name (name); 
   //get the correct dir
+  if(strlen(parse)==0) return NULL; 
   struct thread *curr = thread_current();
   struct dir *dir = get_this_dir (parse);
 
-  struct inode *inode = NULL;
+  struct inode *inode;
 
   if (dir != NULL)
     dir_lookup (dir, parse, &inode);
@@ -126,18 +131,19 @@ bool
 filesys_remove (const char *name) 
 {
   char* file_name = get_file_name(name);
-  struct dir *dir = get_this_dir (name);
+  struct dir *dir = get_this_dir (file_name);
   bool success = dir != NULL && dir_remove (dir, file_name);
   dir_close (dir); 
-  free(file_name);
+  //free(file_name);
 
   return success;
 }
 
 bool filesys_chdir (const char* name)
 {
-    struct dir* dir = get_this_dir(name);
+    
     char* file_name = get_file_name(name);
+    struct dir* dir = get_this_dir(file_name);
     struct inode *inode = NULL;
     struct thread *cur = thread_current();
     
@@ -228,8 +234,10 @@ struct dir* get_this_dir (const char* file_name)
     token != NULL; token = strtok_r (NULL, "/", &save_ptr))
   {
       //this should not happen 
-      if (curr_dir == NULL ) 
+      if (curr_dir == NULL ) {
+        //printf("problem...curr_dir is NULL \n"); //for debugging
         break;
+      }
       //last part of file_name should not exist since that is what we are making
       if (strlen(save_ptr) == 0) {
         success = 1;
@@ -253,7 +261,7 @@ struct dir* get_this_dir (const char* file_name)
     }
   }
 
-  if(success) 
+  if(success==1) 
     return curr_dir; 
   else 
     return NULL;
@@ -275,7 +283,7 @@ char* get_file_name (const char* name)
     memcpy(file_name, "\0", 1); 
   }
 
-  //parse the original name to remove multiple slashes
+
   //parse the original name to remove multiple //
   for (token = strtok_r (temp, "/", &save_ptr); token != NULL; 
     token = strtok_r (NULL, "/", &save_ptr)) {

@@ -19,6 +19,7 @@
 #include "threads/thread.h"
 #include "threads/vaddr.h"
 
+
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmd_line, void (**eip) (void), void **esp);
 
@@ -191,10 +192,8 @@ process_exit (void)
     remove_child(p);
   }
 
-  //added. close the working directory
-  if(thread_current()->pwd){
-    dir_close(thread_current()->pwd);
-  }
+ 
+
 
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */

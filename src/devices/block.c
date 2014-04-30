@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include "devices/ide.h"
 #include "threads/malloc.h"
+#include "threads/synch.h"
 
 /* A block device. */
 struct block
@@ -13,13 +14,16 @@ struct block
     char name[16];                      /* Block device name. */
     enum block_type type;                /* Type of block device. */
     block_sector_t size;                 /* Size in sectors. */
-    bool indirect;                       /*added: 0 if direct 1 if indirect*/
+    //bool indirect;                       /*added: 0 if direct 1 if indirect*/
 
     const struct block_operations *ops;  /* Driver operations. */
     void *aux;                          /* Extra data owned by driver. */
 
     unsigned long long read_cnt;        /* Number of sectors read. */
     unsigned long long write_cnt;       /* Number of sectors written. */
+
+    //added
+    struct lock lock; //protects read_cnt and write_cnt 
   };
 
 /* List of all block devices. */
@@ -123,7 +127,15 @@ block_read (struct block *block, block_sector_t sector, void *buffer)
 {
   check_sector (block, sector);
   block->ops->read (block->aux, sector, buffer);
+
+  //added 
+  //lock_acquire(&block->lock); 
+
   block->read_cnt++;
+
+
+  //added 
+  //lock_release(&block->lock);
 }
 
 /* Write sector SECTOR to BLOCK from BUFFER, which must contain
@@ -137,7 +149,10 @@ block_write (struct block *block, block_sector_t sector, const void *buffer)
   check_sector (block, sector);
   ASSERT (block->type != BLOCK_FOREIGN);
   block->ops->write (block->aux, sector, buffer);
+
+  //lock_acquire(&block->lock); //added
   block->write_cnt++;
+  //lock_release(&block->lock); //added
 }
 
 /* Returns the number of sectors in BLOCK. */
@@ -172,9 +187,11 @@ block_print_stats (void)
       struct block *block = block_by_role[i];
       if (block != NULL)
         {
+          lock_acquire(&block->lock); //added
           printf ("%s (%s): %llu reads, %llu writes\n",
                   block->name, block_type_name (block->type),
                   block->read_cnt, block->write_cnt);
+          lock_release(&block->lock); //added
         }
     }
 }
@@ -197,11 +214,15 @@ block_register (const char *name, enum block_type type,
   strlcpy (block->name, name, sizeof block->name);
   block->type = type;
   block->size = size;
-  block->indirect = 0; //default to direct
+  //block->indirect = 0; //default to direct
   block->ops = ops;
   block->aux = aux;
   block->read_cnt = 0;
   block->write_cnt = 0;
+
+  //added
+  lock_init(&block->lock); 
+
 
   printf ("%s: %'"PRDSNu" sectors (", block->name, block->size);
   print_human_readable_size ((uint64_t) block->size * BLOCK_SECTOR_SIZE);

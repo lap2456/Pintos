@@ -88,10 +88,7 @@ inode_create (block_sector_t sector, off_t length, bool isDirectory)
     struct inode_disk *disk_inode = NULL;
 
     ASSERT (length >= 0);
-    if(length > MAX_FSIZE){
-      //printf("length over max size\n");
-      return false;
-    }
+    
 
     /* If this assertion fails, the inode structure is not exactly
      one sector in size, and you should fix that. */
@@ -100,7 +97,7 @@ inode_create (block_sector_t sector, off_t length, bool isDirectory)
     disk_inode = calloc(1, sizeof *disk_inode);
     if (disk_inode != NULL)
     {
-      disk_inode->length = length;
+      disk_inode->length = length; //??? should this be 0 or length
     	disk_inode->magic = INODE_MAGIC;
     	disk_inode->isDirectory = isDirectory;
       disk_inode->parent_inode = ROOT_DIR_SECTOR;

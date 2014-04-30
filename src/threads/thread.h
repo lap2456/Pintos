@@ -131,7 +131,7 @@ struct thread
     struct file * file_to_run; //file to run (executable)
 
 
-    struct list fds; //list of file descriptors 
+    struct list *fds; //list of file descriptors 
     int next_handle; //next handle value (???)
 
     struct progress *progress;  //this process's completion status

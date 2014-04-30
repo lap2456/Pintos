@@ -15,6 +15,7 @@
 #include "lib/kernel/list.h"
 #include "userprog/process.h"
 #include "userprog/syscall.h"
+#include "threads/malloc.h" 
 
 
 /* Random value for struct thread's `magic' member.
@@ -247,14 +248,21 @@ thread_create (const char *name, int priority,
   sf = alloc_frame (t, sizeof *sf);
   sf->eip = switch_entry;
   sf->ebp = 0;
+
+
+  //added
+  t->fds = (struct list *) malloc(sizeof(struct list));
+  list_init(t->fds); 
+
   if(thread_current()->pwd)
     t->pwd = dir_reopen(thread_current()->pwd);
   else
     t->pwd = NULL;
+
+  
   /* Add to run queue. */
   thread_unblock(t);
   
-
   intr_set_level (old_level);
 
   return tid;
@@ -572,8 +580,7 @@ init_thread (struct thread *t, const char *name, int priority)
   t->numDonations = 0;  
   list_init(&t->children);
   t->progress = NULL; 
-  list_init(&t->fds); 
-  t->next_handle = 2; 
+  t->next_handle = 2;
 
 
   t->magic = THREAD_MAGIC;

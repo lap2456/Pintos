@@ -149,19 +149,23 @@ dir_lookup (const struct dir *dir, const char *name,
    Fails if NAME is invalid (i.e. too long) or a disk or memory
    error occurs. */
 bool
-dir_add (struct dir *dir, const char *name, block_sector_t inode_sector)
+dir_add (struct dir *dir,  const char *name, block_sector_t inode_sector)
 {
   struct dir_entry e;
   off_t ofs;
   bool success = false;
-
-  name = get_name_only(name);
+  char * file_name;
+  file_name = get_name_only(name);
 
   ASSERT (dir != NULL);
   ASSERT (name != NULL);
+
+  if(strlen(file_name)==0){
+    return false; 
+  }
   
     /* Check NAME for validity. */
-  if (name == '\0' || strlen (name) > NAME_MAX){
+  if (*file_name == '\0' || strlen (file_name) > NAME_MAX){
     //printf("invalid name\n");
     return false; 
   }
@@ -169,9 +173,9 @@ dir_add (struct dir *dir, const char *name, block_sector_t inode_sector)
   lock_acquire(&dir_get_inode(dir)->inode_lock);
 
   /* Check that NAME is not in use. */
-  if (lookup (dir, name, NULL, NULL)){
-    //printf("name already in use\n");
-    goto done;
+  if (lookup (dir, file_name, NULL, NULL)){
+    success = false; 
+    goto done; 
   }
 
   //if(!inode_add_parent(inode_get_inumber(dir_get_inode(dir)), inode_sector))
