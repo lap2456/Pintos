@@ -1,0 +1,23 @@
+Here is what we are trying to do:
+
+The main function we messed with is syscall_exit in syscall.c. Compare what it 
+used to be with what it is now to see differences. Our thought process is that we aren't sure
+if and where we need to close directories and/or files within a directory. 
+
+
+ 
+(SEE UPDATE BELOW) For some reason we are failing some userprog tests that create files with illegal file names 
+(create_empty, create_long). We didn't have time figure out why we are failing these, so you should
+start by looking at these and trying to fix them. We are also failing create_exists, and aren't sure why.
+We think that these errors are caused because we aren't verifying name somewhere in filesys_create. 
+
+UDPATE: I added a few checks for file names that are too long, empty, or null in filesys_create. 
+I have no clue how these userprog tests were passing before or where we were checking for illegal names,
+but for now they work. WE ARE STILL FAILING USERPROG/CREATE_EXISTS...... 
+
+Once you get past this, run some filesys tests that we are failing in VERBOSE mode and you will
+see where our other problems are. Some things I know for sure:
+ - In filesys_create our dir_add is not working (sometimes the ASSERT fails)
+ - In filesys_create sometimes the ASSERT(dir!=null) fails after the call to get_this_dir
+ 
+ 
