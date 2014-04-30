@@ -83,7 +83,7 @@ block_sector_t byte_to_inode_block(struct inode *inode, off_t pos, bool read){
 bool allocate_indirect(block_sector_t *ind, int index, size_t sectors){
     int i = index;
     int count = sectors;
-    printf("allocating new indirect. sectors = %d \n", sectors);
+//    printf("allocating new indirect. sectors = %d \n", sectors);
     static char zeros[BLOCK_SECTOR_SIZE];
     while(count>0){
         if(free_map_allocate(1, &ind[i])){
@@ -164,7 +164,7 @@ inode_create (block_sector_t sector, off_t length, bool isDirectory)
 
     ASSERT (length >= 0);
     if(length > MAX_FSIZE){
-      printf("length over max size\n");
+  //    printf("length over max size\n");
       return false;
     }
 
@@ -229,7 +229,7 @@ inode_create (block_sector_t sector, off_t length, bool isDirectory)
       //printf("inode create worked\n");
       return true;
     }
-    printf("disk inode null\n");
+   // printf("disk inode null\n");
     return false;
 }
 
@@ -394,12 +394,12 @@ off_t
 inode_write_at (struct inode *inode, const void *buffer_, off_t size,
                 off_t offset) 
 {
-  printf("byte offset we are writing at is %d, we are writing %d bytes and the length is %d\n", offset, size, inode_length(inode));
+//  printf("byte offset we are writing at is %d, we are writing %d bytes and the length is %d\n", offset, size, inode_length(inode));
   const uint8_t *buffer = buffer_;
   off_t bytes_written = 0;
   uint8_t *bounce = NULL;
   if (inode->deny_write_cnt){
-    	printf("write count is too high!!!\n");
+  //  	printf("write count is too high!!!\n");
       return 0;
   }
 

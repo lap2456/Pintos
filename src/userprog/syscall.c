@@ -45,12 +45,13 @@ struct file_descriptor{
 	struct file *file; 
 	int handle; //file handle
 };
-
+/*
 void do_dis(struct file * file){
   lock_acquire(&file_sys_lock);
   file_deny_write(file);
   lock_release(&file_sys_lock);
 }
+*/
 void
 syscall_init (void) 
 {
