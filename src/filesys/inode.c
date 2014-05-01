@@ -83,23 +83,23 @@ block_sector_t byte_to_inode_block(struct inode *inode, off_t pos, bool read){
 bool allocate_indirect(block_sector_t *ind, int index, size_t sectors){
     int i = index;
     int count = sectors;
-//    printf("allocating new indirect. sectors = %d \n", sectors);
     static char zeros[BLOCK_SECTOR_SIZE];
+    memset(zeros, 0, BLOCK_SECTOR_SIZE);
     while(count>0){
       if(free_map_allocate(1, &ind[i])){
         block_write(fs_device, ind[i], zeros);
-        printf("sector allocated is sector number: %d\n", ind[i]);
         i++;
       }
       else
-        return 0;
+        return false;
       count-=1;
     }
-    return 1;
+    return true;
 }
 
 bool extend(struct inode *inode, off_t offset){ 
   ASSERT(inode != NULL); 
+
   size_t old_sectors = bytes_to_sectors(inode->data.length);
   size_t sectors_to_add = bytes_to_sectors(offset) - old_sectors;
 
@@ -127,22 +127,25 @@ bool extend(struct inode *inode, off_t offset){
     block_write(fs_device, dbl_block[indirect_index + temp], zeros);
     temp += 1;
   }
-  size_t how_many = MIN(sectors_left, sectors_to_add);
-  block_read(fs_device, dbl_block[indirect_index], indirect_block);
-  size_t index = old_sectors%128;
-  if(!allocate_indirect(indirect_block, index, how_many)){
-    printf("allocation failed\n");
-    return false;
+  size_t how_many = 0;
+  size_t index = 0;
+  //if we need to fill a partially filled indirect block
+  if(sectors_left > 0){
+    how_many = MIN(sectors_left, sectors_to_add);
+    block_read(fs_device, dbl_block[indirect_index], indirect_block);
+    index = old_sectors%128;
+    if(!allocate_indirect(indirect_block, index, how_many)){
+      return false;
+    }
+    sectors_to_add -= how_many;
+    block_write(fs_device, dbl_block[indirect_index], indirect_block);
+    indirect_index += 1;
   }
-  sectors_to_add -= how_many;
-  block_write(fs_device, dbl_block[indirect_index], indirect_block);
-  indirect_index += 1;
 
   while(sectors_to_add > 0){
     how_many = MIN(sectors_to_add, 128);
     block_read(fs_device, dbl_block[indirect_index], indirect_block);
     if(!allocate_indirect(indirect_block, 0, how_many)){
-      printf("allocation failed\n");
       return false;
     }
     sectors_to_add -= how_many;
@@ -412,6 +415,7 @@ off_t
 inode_write_at (struct inode *inode, const void *buffer_, off_t size,
                 off_t offset) 
 {
+  //printf("offset is: %d, size is: %d\n", offset, size);
 //  printf("byte offset we are writing at is %d, we are writing %d bytes and the length is %d\n", offset, size, inode_length(inode));
   const uint8_t *buffer = buffer_;
   off_t bytes_written = 0;
@@ -423,14 +427,15 @@ inode_write_at (struct inode *inode, const void *buffer_, off_t size,
 
   while (size > 0) 
   {
-    if(inode->data.length < offset + size){
+    if(inode->data.length < (offset + size)){
       if(!inode->data.isDirectory)
         inode_lock(inode);
-        //once you have the lock do the check again in case someone else already extended while you were waiting on the lock
-      if(inode->data.length < offset + size)
+      //once you have the lock do the check again in case someone else already extended while you were waiting on the lock
+      if(inode->data.length < (offset + size)){
         if(!extend(inode, offset + size)){
           printf("extend failed!\n");
         }
+      }
       if(!inode->data.isDirectory)  
         inode_unlock(inode);
     }
