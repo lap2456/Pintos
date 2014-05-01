@@ -138,6 +138,7 @@ dir_lookup (const struct dir *dir, const char *name,
     else
       *inode = NULL;
     inode_unlock(dir_get_inode((struct dir *) dir));
+    free(name);
   }
   return *inode != NULL;
 }
@@ -198,6 +199,7 @@ dir_add (struct dir *dir, const char *name, block_sector_t inode_sector)
 
  done:
   inode_unlock(dir_get_inode(dir));
+  free(name);
   return success;
 }
 
@@ -223,21 +225,17 @@ dir_remove (struct dir *dir, const char *name)
 
   /* Open inode. */
   inode = inode_open (e.inode_sector);
+  ASSERT (inode != NULL);
   if (inode == NULL)
     goto done;
 
   if(inode_is_dir(inode)){
-    if(inode_return_open_cnt(inode) > 1)
+    if(inode_return_open_cnt(inode) > 1){
         goto done;
-    char *temp_name = (char*)malloc(sizeof(char) * (NAME_MAX + 1));
-    struct dir *temp_dir = dir_open(inode);
-    if(dir_readdir(temp_dir, temp_name)){
-      free(temp_name);
-      dir_close(temp_dir);
+      }
+    if(!dir_is_empty(inode)){
       goto done;
     }
-    free(temp_name);
-    dir_close(temp_dir);
   }
 
   /* Erase directory entry. */
@@ -263,7 +261,7 @@ dir_readdir (struct dir *dir, char name[NAME_MAX + 1])
 {
   struct dir_entry e;
   inode_lock(dir_get_inode(dir));
-  while (inode_read_at (dir->inode, &e, sizeof e, dir->pos) == sizeof e) 
+  while (inode_read_at(dir->inode, &e, sizeof e, dir->pos) == sizeof e) 
     {
       dir->pos += sizeof e;
       if (e.in_use)
@@ -271,7 +269,7 @@ dir_readdir (struct dir *dir, char name[NAME_MAX + 1])
           strlcpy (name, e.name, NAME_MAX + 1);
           inode_unlock(dir_get_inode(dir));
           return true;
-        } 
+        }
     }
   inode_unlock(dir_get_inode(dir));
   return false;
@@ -280,11 +278,12 @@ dir_readdir (struct dir *dir, char name[NAME_MAX + 1])
 bool dir_is_empty (struct inode *inode)
 {
   struct dir_entry e;
-  off_t pos = 0;
+  off_t pos = 40; //overcome the default "." and ".."
   while(inode_read_at (inode, &e, sizeof e, pos) == sizeof e){
     pos += sizeof e;
-    if(e.in_use)
-	return false;
+    if(e.in_use){
+      return false;
+    }
   }
   return true;
 }

@@ -61,7 +61,6 @@ struct inode
 byte offset POS.*/
 block_sector_t byte_to_inode_block(struct inode *inode, off_t pos, bool read){ 
   ASSERT (inode != NULL);
- 
   if(pos < inode->data.length) { 
     /*First get indirect block*/
     off_t ind_index = (pos / BLOCK_SECTOR_SIZE) / INDIRECT_BLOCKS; 
@@ -356,14 +355,17 @@ inode_remove (struct inode *inode)
 off_t
 inode_read_at (struct inode *inode, void *buffer_, off_t size, off_t offset) 
 {
-    uint8_t *buffer = buffer_;
+  uint8_t *buffer = buffer_;
   off_t bytes_read = 0;
   uint8_t *bounce = NULL;
+
 
   while (size > 0)
     {
       /* Disk sector to read, starting byte offset within sector. */
       block_sector_t sector_idx = byte_to_inode_block (inode, offset, true);
+      if(sector_idx == -1)
+        break;
       int sector_ofs = offset % BLOCK_SECTOR_SIZE;
 
       /* Bytes left in inode, bytes left in sector, lesser of the two. */
@@ -400,7 +402,8 @@ into caller's buffer. */
       offset += chunk_size;
       bytes_read += chunk_size;
     }
-  free (bounce);
+  if(bytes_read != 0)
+    free (bounce);
 
   return bytes_read;
 }

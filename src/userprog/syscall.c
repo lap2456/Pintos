@@ -577,10 +577,12 @@ static bool sys_readdir (int handle, char* name){
   const struct inode *inode = file_get_inode(fd->file);  
   bool isDirectory = inode_is_dir(inode);
   if(!isDirectory)
-	return false;
+    return false;
   struct dir *dir = dir_open(inode);
+  if(dir_is_empty(inode))
+    return false;
   if(!dir_readdir(dir, name))
-	return false;
+    return false;
   return true;
 }
 
