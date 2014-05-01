@@ -27,5 +27,6 @@ void inode_lock (const struct inode *inode);
 void inode_unlock (const struct inode *inode);
 block_sector_t inode_get_parent (const struct inode *inode);
 bool inode_add_parent (block_sector_t parent_inode, block_sector_t child_inode);
+bool inode_is_dir (const struct inode *inode);
 
 #endif /* filesys/inode.h */

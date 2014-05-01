@@ -418,48 +418,52 @@ static int sys_write (int handle, void *buffer, unsigned length){
   int bytes_written = 0;
 
   /* Lookup up file descriptor. */
-  if (handle != STDOUT_FILENO)
+  if (handle != STDOUT_FILENO){
     fd = find_fd (handle);
-
+    const struct inode *inode = file_get_inode(fd->file);
+    bool isDirectory = inode_is_dir(inode);
+    if(isDirectory)
+      return -1;
+  }
   lock_acquire (&file_sys_lock);
   while (length > 0)
+  {
+    /* How many bytes to write to this page??*/
+    size_t page_left = PGSIZE - pg_ofs (usrc);
+    size_t write_amt = length < page_left ? length : page_left;
+    off_t retval;
+
+    /* Check that we can touch this user page. */
+    if (!verify_pointer (buffer))
     {
-      /* How many bytes to write to this page??*/
-      size_t page_left = PGSIZE - pg_ofs (usrc);
-      size_t write_amt = length < page_left ? length : page_left;
-      off_t retval;
-
-      /* Check that we can touch this user page. */
-      if (!verify_pointer (buffer))
-        {
-          lock_release (&file_sys_lock);
-          thread_exit ();
-        }
-
-      /* Perform write. */
-      if (handle == STDOUT_FILENO)
-        {
-          putbuf (usrc, write_amt);
-          retval = write_amt;
-        }
-      else
-        retval = file_write (fd->file, usrc, write_amt);
-      if (retval < 0)
-        {
-          if (bytes_written == 0)
-            bytes_written = -1;
-          break;
-        }
-      bytes_written += retval;
-
-      /* If it was a short write we're done. */
-      if (retval != (off_t) write_amt)
-        break;
-
-      /* Advance. */
-      usrc += retval;
-      length -= retval;
+      lock_release (&file_sys_lock);
+      thread_exit ();
     }
+
+    /* Perform write. */
+    if (handle == STDOUT_FILENO)
+    {
+      putbuf (usrc, write_amt);
+      retval = write_amt;
+    }
+    else
+      retval = file_write (fd->file, usrc, write_amt);
+    if (retval < 0)
+    {
+      if (bytes_written == 0)
+        bytes_written = -1;
+      break;
+    }
+    bytes_written += retval;
+
+    /* If it was a short write we're done. */
+    if (retval != (off_t) write_amt)
+      break;
+
+    /* Advance. */
+    usrc += retval;
+    length -= retval;
+  }
   lock_release (&file_sys_lock);
   return bytes_written;
 }

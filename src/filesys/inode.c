@@ -415,20 +415,18 @@ off_t
 inode_write_at (struct inode *inode, const void *buffer_, off_t size,
                 off_t offset) 
 {
-  //printf("offset is: %d, size is: %d\n", offset, size);
-//  printf("byte offset we are writing at is %d, we are writing %d bytes and the length is %d\n", offset, size, inode_length(inode));
   const uint8_t *buffer = buffer_;
   off_t bytes_written = 0;
   uint8_t *bounce = NULL;
-  if (inode->deny_write_cnt){
-  //  	printf("write count is too high!!!\n");
+  if (inode->deny_write_cnt > 0){
+    	//printf("write count is too high!!!\n");
       return 0;
   }
 
   while (size > 0) 
   {
     if(inode->data.length < (offset + size)){
-      if(!inode->data.isDirectory)
+      if(!inode_is_dir(inode))
         inode_lock(inode);
       //once you have the lock do the check again in case someone else already extended while you were waiting on the lock
       if(inode->data.length < (offset + size)){
@@ -436,7 +434,7 @@ inode_write_at (struct inode *inode, const void *buffer_, off_t size,
           printf("extend failed!\n");
         }
       }
-      if(!inode->data.isDirectory)  
+      if(!inode_is_dir(inode))  
         inode_unlock(inode);
     }
     /* Sector to write, starting byte offset within sector. */

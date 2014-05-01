@@ -137,42 +137,42 @@ filesys_remove (const char *name)
 
 bool filesys_chdir (const char* name)
 {
-    struct dir* dir = get_this_dir(name);
-    char* file_name = get_file_name(name);
-    struct inode *inode = NULL;
-    struct thread *cur = thread_current();
-    
-    if(dir != NULL)
+  struct dir* dir = get_this_dir(name);
+  char* file_name = get_file_name(name);
+  struct inode *inode = NULL;
+  struct thread *cur = thread_current();
+   
+  if(dir != NULL)
+  {
+    if(strcmp(file_name, "..") == 0)
     {
-	if(strcmp(file_name, "..") == 0)
-	{
 	    if(!dir_get_parent(dir, &inode))
 	    {
-		free(file_name);
-		return false;
+		    free(file_name);
+		    return false;
 	    }
-	}
-	else if((is_root_dir(dir) && strlen(file_name) == 0) || strcmp(file_name, ".") == 0)
-	{
+    }
+    else if((is_root_dir(dir) && strlen(file_name) == 0) || strcmp(file_name, ".") == 0)
+    {
 	    cur->pwd = dir;
 	    free(file_name);
 	    return true;
-	}
-	else
+    }
+    else
 	    dir_lookup(dir, file_name, &inode);
-    }
+  }
     
-    dir_close(dir);
-    free(file_name);
+  dir_close(dir);
+  free(file_name);
 
-    dir = dir_open (inode);
-    if(dir)
-    {
-	dir_close(cur->pwd);
-	cur->pwd=dir;
-	return true;
-    }
-    return false;
+  dir = dir_open (inode);
+  if(dir)
+  {
+    dir_close(cur->pwd);
+    cur->pwd=dir;
+    return true;
+  }
+  return false;
 }
 
 /* Formats the file system. */
