@@ -127,7 +127,7 @@ bool
 filesys_remove (const char *name) 
 {
   char* file_name = get_file_name(name);
-  struct dir *dir = get_this_dir (name);
+  struct dir *dir = get_this_dir (file_name);
   bool success = dir != NULL && dir_remove (dir, file_name);
   dir_close (dir); 
   free(file_name);
@@ -165,10 +165,10 @@ bool filesys_chdir (const char* name)
   dir_close(dir);
   free(file_name);
 
-  dir = dir_open (inode);
+  dir = dir_open(inode_reopen(inode));
   if(dir)
   {
-    dir_close(cur->pwd);
+    //dir_close(cur->pwd);
     cur->pwd=dir;
     return true;
   }
@@ -251,7 +251,7 @@ struct dir* get_this_dir (const char* file_name)
       //if directory does not exist then an error has occured
       else break;
   }
-
+  free(temp);
   if(success) 
     return curr_dir; 
   else 

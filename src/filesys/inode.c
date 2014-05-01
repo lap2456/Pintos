@@ -86,6 +86,8 @@ bool allocate_indirect(block_sector_t *ind, int index, size_t sectors){
     memset(zeros, 0, BLOCK_SECTOR_SIZE);
     while(count>0){
       if(free_map_allocate(1, &ind[i])){
+        if(ind[i] == 4096)
+          return false;
         block_write(fs_device, ind[i], zeros);
         i++;
       }
@@ -315,29 +317,28 @@ inode_get_inumber (const struct inode *inode)
 void
 inode_close (struct inode *inode) 
 {
-    /* Ignore null pointer. */
-    if (inode == NULL)
-    	return;
+  /* Ignore null pointer. */
+  if (inode == NULL)
+    return;
     
-    /* Release resources if this was the last opener. */
-    if (--inode->open_cnt == 0)
-    {
-      	/* Remove from inode list and release lock. */
-      	//added: RELEASE LOCK
-      	list_remove (&inode->elem);
+  /* Release resources if this was the last opener. */
+  if (--inode->open_cnt == 0)
+  {
+    /* Remove from inode list and release lock. */
+    //added: RELEASE LOCK
+    list_remove (&inode->elem);
       	
-      	/* Deallocate blocks if removed. */
-      	if (inode->removed) 
-        {
-            free_map_release (inode->sector, 1);
-            inode_deallocate (inode); 
-        }
-        else
-	    block_write(fs_device, inode->sector, &inode->data);
-   	
-
-        free (inode); 
+    /* Deallocate blocks if removed. */
+    if (inode->removed) 
+    {
+      inode_deallocate (inode); 
+      free_map_release (inode->sector, 1);
     }
+    else{
+      block_write(fs_device, inode->sector, &inode->data);
+    }
+    free (inode); 
+  }
 }
 
 /* Marks INODE to be deleted when it is closed by the last caller who
@@ -433,9 +434,7 @@ inode_write_at (struct inode *inode, const void *buffer_, off_t size,
         inode_lock(inode);
       //once you have the lock do the check again in case someone else already extended while you were waiting on the lock
       if(inode->data.length < (offset + size)){
-        if(!extend(inode, offset + size)){
-          printf("extend failed!\n");
-        }
+        extend(inode, offset + size);
       }
       if(!inode_is_dir(inode))  
         inode_unlock(inode);
@@ -518,28 +517,27 @@ void inode_deallocate (struct inode *inode)
 {
   size_t sectors = bytes_to_sectors (inode->data.length);
   int i;
-  struct indirect_block ind;
-  block_read(fs_device, inode->data.doubly_indirect, &ind);
-  size_t num_indirects = sectors/128;
-  if(sectors%128 > 0)
-	num_indirects++;
+  block_sector_t dbl_block[128];
+  block_sector_t ind_block[128];
+  block_read(fs_device, inode->data.doubly_indirect, dbl_block);
   size_t how_many = 0;
-  for(i=0; i<num_indirects; i++){
+  size_t index = 0;
+  while(sectors > 0){
     how_many = MIN(sectors, 128);
+    block_read(fs_device, dbl_block[index], ind_block);
+    inode_deallocate_indirect(ind_block, how_many);
     sectors -= how_many;
-    inode_deallocate_indirect(&ind.blocks[i], how_many);
+    free_map_release(dbl_block[index], 1);
+    index += 1;
   }
   free_map_release(inode->data.doubly_indirect, 1);	 
 }
 
-void inode_deallocate_indirect (block_sector_t *sector, size_t data_ptr)
+void inode_deallocate_indirect (block_sector_t *ind, size_t data_ptr)
 {
   size_t i;
-  struct indirect_block ind;
-  block_read(fs_device, *sector, &ind);
   for(i=0; i<data_ptr; i++)
-    free_map_release(ind.blocks[i], 1);
-  free_map_release(*sector, 1);
+    free_map_release(ind[i], 1);
 }
 
 block_sector_t inode_return_parent (const struct inode *inode)

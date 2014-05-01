@@ -44,6 +44,7 @@ struct file_descriptor{
 	struct list_elem elem; 
 	struct file *file; 
 	int handle; //file handle
+  struct dir * directory;
 };
 /*
 void do_dis(struct file * file){
@@ -576,14 +577,14 @@ static bool sys_readdir (int handle, char* name){
   fd = find_fd(handle);
   const struct inode *inode = file_get_inode(fd->file);  
   bool isDirectory = inode_is_dir(inode);
-  if(!isDirectory)
+  if(!isDirectory){
     return false;
-  struct dir *dir = dir_open(inode);
-  if(dir_is_empty(inode))
+  }
+  struct dir *dir = thread_current()->pwd;
+  if(dir_is_empty(inode)){
     return false;
-  if(!dir_readdir(dir, name))
-    return false;
-  return true;
+  }
+  return dir_readdir(dir, name);
 }
 
 /*Returns true if fd represents a directory, false if it represents an ordinary file.*/

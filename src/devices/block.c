@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include "devices/ide.h"
 #include "threads/malloc.h"
+//#include <debug.h>
 
 /* A block device. */
 struct block
@@ -109,6 +110,7 @@ check_sector (struct block *block, block_sector_t sector)
     {
       /* We do not use ASSERT because we want to panic here
          regardless of whether NDEBUG is defined. */
+      //debug_backtrace();
       PANIC ("Access past end of device %s (sector=%"PRDSNu", "
              "size=%"PRDSNu")\n", block_name (block), sector, block->size);
     }
