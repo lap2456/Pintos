@@ -19,7 +19,7 @@ test_main (void)
   int i;
 
   msg ("creating many levels of files and directories...");
-  quiet = true;
+  //quiet = true;
   CHECK (mkdir ("start"), "mkdir \"start\"");
   CHECK (chdir ("start"), "chdir \"start\"");
   for (i = 0; ; i++) 
@@ -70,7 +70,7 @@ test_main (void)
       CHECK (chdir (dir_name), "chdir \"%s\"", dir_name);
     }
   CHECK (i > 200, "created files and directories only to level %d", i);
-  quiet = false;
+  //quiet = false;
 
   msg ("removing all but top 10 levels of files and directories...");
   //quiet = true;

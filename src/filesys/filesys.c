@@ -67,14 +67,6 @@ filesys_create (const char *name, off_t initial_size, bool isDirectory)
     && inode_create (inode_sector, initial_size, isDirectory)
     && dir_add (dir, file_name, inode_sector));
   
-  
- /*
-  ASSERT(dir != NULL);
-  ASSERT(free_map_allocate(1, &inode_sector));
-  ASSERT(inode_create (inode_sector, initial_size, isDirectory));
-  ASSERT(dir_add(dir, file_name, inode_sector));
-  success = true;
-*/
   if (!success && inode_sector != 0) 
     free_map_release (inode_sector, 1);
 
@@ -85,9 +77,9 @@ filesys_create (const char *name, off_t initial_size, bool isDirectory)
 
     dir_add(d, ".", inode_sector); 
     struct inode * parent = NULL; 
-    dir_get_parent(dir, &parent); 
-    block_sector_t inode_sector_parent = inode_get_inumber(parent); 
-
+    parent = dir_get_inode(dir); 
+    block_sector_t inode_sector_parent = inode_get_inumber(parent);
+    //inode_add_parent (inode_sector_parent, inode_sector);
     dir_add(d, "..", inode_sector_parent); 
     dir_close(d); 
     file_close(f); 
@@ -128,6 +120,8 @@ filesys_remove (const char *name)
 {
   char* file_name = get_file_name(name);
   struct dir *dir = get_this_dir (file_name);
+  struct inode * inode = dir_get_inode(dir);
+  //printf("dir's inode sector is: %d\n", inode_get_inumber(inode));
   bool success = dir != NULL && dir_remove (dir, file_name);
   dir_close (dir); 
   free(file_name);
@@ -151,6 +145,7 @@ bool filesys_chdir (const char* name)
 		    free(file_name);
 		    return false;
 	    }
+      dir_close(cur->pwd); //ADDED JUST NOW
     }
     else if((is_root_dir(dir) && strlen(file_name) == 0) || strcmp(file_name, ".") == 0)
     {

@@ -324,6 +324,7 @@ inode_close (struct inode *inode)
   /* Release resources if this was the last opener. */
   if (--inode->open_cnt == 0)
   {
+    
     /* Remove from inode list and release lock. */
     //added: RELEASE LOCK
     list_remove (&inode->elem);
@@ -339,6 +340,8 @@ inode_close (struct inode *inode)
     }
     free (inode); 
   }
+  //else
+    //printf("open count too high to close\n");
 }
 
 /* Marks INODE to be deleted when it is closed by the last caller who

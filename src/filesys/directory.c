@@ -101,7 +101,6 @@ lookup (const struct dir *dir, const char *name,
   
   ASSERT (dir != NULL);
   ASSERT (name != NULL);
-
   for (ofs = 0; inode_read_at (dir->inode, &e, sizeof e, ofs) == sizeof e;
        ofs += sizeof e) 
     if (e.in_use && !strcmp (name, e.name)) 
@@ -112,6 +111,8 @@ lookup (const struct dir *dir, const char *name,
           *ofsp = ofs;
         return true;
       }
+  //for(ofs = 0; inode_read_at (dir->inode, &e, sizeof e, ofs) == sizeof e; ofs += sizeof e) 
+    //printf("name of this entry is: %s\n", e.name);
   return false;
 }
 
@@ -218,28 +219,36 @@ dir_remove (struct dir *dir, const char *name)
 
   inode_lock(dir_get_inode(dir));
   name = get_name_only(name);
+  
   /* Find directory entry. */
-  if (!lookup (dir, name, &e, &ofs))
+  if (!lookup (dir, name, &e, &ofs)){
+    //printf("lookup failed\n");
     goto done;
+  }
 
   /* Open inode. */
   inode = inode_open (e.inode_sector);
-  if (inode == NULL)
+  if (inode == NULL){
+    //printf("inode is null\n");
     goto done;
+  }
 
   if(inode_is_dir(inode)){
     if(inode_return_open_cnt(inode) > 1){
+        //printf("Inode is still open!\n");
         goto done;
       }
     if(!dir_is_empty(inode)){
+      //printf("Dir is not empty\n");
       goto done;
     }
   }
 
   /* Erase directory entry. */
   e.in_use = false;
-  if (inode_write_at (dir->inode, &e, sizeof e, ofs) != sizeof e) 
+  if (inode_write_at (dir->inode, &e, sizeof e, ofs) != sizeof e){
     goto done;
+  }
 
   /* Remove inode. */
   inode_remove (inode);
