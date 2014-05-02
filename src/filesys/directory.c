@@ -203,6 +203,21 @@ dir_add (struct dir *dir, const char *name, block_sector_t inode_sector)
   return success;
 }
 
+/*
+void
+print_dir_entries (struct dir *dir){
+  struct dir_entry e;
+  off_t ofs;
+  struct inode *inode = dir_get_inode(dir);
+  printf("inode sector is: %d\n", inode_get_inumber(inode));
+  for (ofs = 0; inode_read_at (dir->inode, &e, sizeof e, ofs) == sizeof e;
+       ofs += sizeof e){
+    if(e.in_use)
+      printf("dir entry: %s\n", e.name);
+  }
+}
+*/
+
 /* Removes any entry for NAME in DIR.
    Returns true if successful, false on failure,
    which occurs only if there is no file with the given NAME. */
@@ -216,15 +231,20 @@ dir_remove (struct dir *dir, const char *name)
 
   ASSERT (dir != NULL);
   ASSERT (name != NULL);
-
+  //print_dir_entries(dir);
   inode_lock(dir_get_inode(dir));
   name = get_name_only(name);
-  
+  //struct inode * myinode = dir_get_inode(dir);
+  //printf("directory's inode sector is: %d  and the root directory's sector is %d\n", inode_get_inumber(myinode) ,ROOT_DIR_SECTOR);
+  //printf("name is %s\n", name);
+  //printf("chdir part 1\n");
+  //myinode = dir_get_inode(thread_current()->pwd);
   /* Find directory entry. */
   if (!lookup (dir, name, &e, &ofs)){
     //printf("lookup failed\n");
     goto done;
   }
+  //printf("chdir part 2\n");
 
   /* Open inode. */
   inode = inode_open (e.inode_sector);
@@ -232,9 +252,13 @@ dir_remove (struct dir *dir, const char *name)
     //printf("inode is null\n");
     goto done;
   }
+  //printf("chdir part 3\n");
 
   if(inode_is_dir(inode)){
+    if(!is_root_dir(dir))
+      inode_close(inode);
     if(inode_return_open_cnt(inode) > 1){
+        //printf("Inode sector is: %d\n", inode_get_inumber(inode));
         //printf("Inode is still open!\n");
         goto done;
       }
@@ -243,6 +267,8 @@ dir_remove (struct dir *dir, const char *name)
       goto done;
     }
   }
+
+  //printf("chdir part 4\n");
 
   /* Erase directory entry. */
   e.in_use = false;
@@ -295,13 +321,13 @@ bool dir_is_empty (struct inode *inode)
 
 bool is_root_dir (struct dir* dir)
 {
-    //if not a directory then obviously return false
-    if(!dir)
-	return false;
-    //if this dir's inode's sector is the root dir sector then return true
-    if(inode_get_inumber(dir_get_inode(dir)) == ROOT_DIR_SECTOR)
-	return true;
+  //if not a directory then obviously return false
+  if(!dir)
     return false;
+  //if this dir's inode's sector is the root dir sector then return true
+  if(inode_get_inumber(dir_get_inode(dir)) == ROOT_DIR_SECTOR)
+    return true;
+  return false;
 }
 
 bool dir_get_parent (struct dir* dir, struct inode **inode)

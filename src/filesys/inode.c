@@ -285,6 +285,7 @@ inode_open (block_sector_t sector)
     /* Initialize. */
     list_push_front (&open_inodes, &inode->elem);
     inode->sector = sector;
+    //printf("opening sector %d\n", sector);
     inode->open_cnt = 1;
     inode->deny_write_cnt = 0;
     inode->removed = false;
@@ -300,7 +301,7 @@ inode_reopen (struct inode *inode)
 {
     if (inode != NULL)
     	inode->open_cnt++;
-    //ASSERT(1==0);
+    //printf("reopening sector %d and moving open_cnt to: %d\n", inode_get_inumber(inode), inode->open_cnt);
     return inode;
 }
 
@@ -320,11 +321,12 @@ inode_close (struct inode *inode)
   /* Ignore null pointer. */
   if (inode == NULL)
     return;
+
+  //printf("closing sector %d open_cnt reduced to: %d\n", inode_get_inumber(inode), inode->open_cnt - 1); 
     
   /* Release resources if this was the last opener. */
   if (--inode->open_cnt == 0)
   {
-    
     /* Remove from inode list and release lock. */
     //added: RELEASE LOCK
     list_remove (&inode->elem);

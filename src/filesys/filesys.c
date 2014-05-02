@@ -79,7 +79,7 @@ filesys_create (const char *name, off_t initial_size, bool isDirectory)
     struct inode * parent = NULL; 
     parent = dir_get_inode(dir); 
     block_sector_t inode_sector_parent = inode_get_inumber(parent);
-    //inode_add_parent (inode_sector_parent, inode_sector);
+    inode_add_parent (inode_sector_parent, inode_sector);
     dir_add(d, "..", inode_sector_parent); 
     dir_close(d); 
     file_close(f); 
@@ -135,7 +135,6 @@ bool filesys_chdir (const char* name)
   char* file_name = get_file_name(name);
   struct inode *inode = NULL;
   struct thread *cur = thread_current();
-   
   if(dir != NULL)
   {
     if(strcmp(file_name, "..") == 0)
@@ -153,14 +152,15 @@ bool filesys_chdir (const char* name)
 	    free(file_name);
 	    return true;
     }
-    else
-	    dir_lookup(dir, file_name, &inode);
+    else{
+      dir_lookup(dir, file_name, &inode);
+    }
   }
-    
   dir_close(dir);
   free(file_name);
 
   dir = dir_open(inode_reopen(inode));
+  inode_close(inode);
   if(dir)
   {
     //dir_close(cur->pwd);
